@@ -25,6 +25,7 @@
 ### Core Gameplay
 - **Character Selection** — Choose a male or female trainer to begin
 - **Monster Battles** — Battle 8 unique MathMon across 4 math categories
+- **Living Overworld** — Explore a village with residential homes, commercial buildings, agricultural fields, villagers, a cave trade district, and a beach community
 - **Four Math Categories:**
   - 🔴 Addition (+ Pluspy, Sumslime)
   - 🔵 Subtraction (− Minusquid, Diffdrake)
