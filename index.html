@@ -1,0 +1,49 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MathMon Quest - Math RPG</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/game-shell.css?v=3">
+</head>
+<body>
+    <div id="game-container">
+        <div id="loading">Loading MathMon Quest...<br><span id="load-status">Initializing...</span></div>
+        <div id="error"></div>
+    </div>
+
+    <script>
+        window.showLoadError = function(msg) {
+            console.error('[MathMon]', msg);
+            const loading = document.getElementById('loading');
+            const errorEl = document.getElementById('error');
+            if (loading) loading.style.display = 'none';
+            if (errorEl) {
+                errorEl.style.display = 'block';
+                errorEl.textContent = 'ERROR: ' + msg;
+            }
+        };
+        window.updateLoadStatus = function(msg) {
+            const el = document.getElementById('load-status');
+            if (el) el.textContent = msg;
+            console.log('[MathMon]', msg);
+        };
+    </script>
+
+    <script src="js/phaser.min.js?v=3" onerror="window.showLoadError('Failed to load js/phaser.min.js')"
+            onload="window.updateLoadStatus('Phaser loaded')"></script>
+    <script src="js/monsters.js?v=3" onerror="window.showLoadError('Failed to load js/monsters.js')"
+            onload="window.updateLoadStatus('monsters.js loaded')"></script>
+    <script src="js/questions.js?v=3" onerror="window.showLoadError('Failed to load js/questions.js')"
+            onload="window.updateLoadStatus('questions.js loaded')"></script>
+    <script src="js/ml.js?v=3" onerror="window.showLoadError('Failed to load js/ml.js')"
+            onload="window.updateLoadStatus('ml.js loaded')"></script>
+    <script src="js/phaser-game.js?v=3" onerror="window.showLoadError('Failed to load js/phaser-game.js')"
+            onload="window.updateLoadStatus('phaser-game.js loaded')"></script>
+    <script src="js/bootstrap.js?v=3"></script>
+</body>
+</html>
