@@ -32,7 +32,7 @@ cd python && python server.py
 # Then visit http://localhost:5000
 
 # JavaScript validation — open browser console on index.html
-# No formal test framework; test game manually in the browser
+# Run automated Python coverage with: pytest -q
 ```
 
 ## Game Architecture
@@ -79,6 +79,8 @@ python/
 │   ├── /api/ml/train        → train model
 │   ├── /api/monsters        → monster roster
 │   └── /api/questions       → question generation
+├── azure_ml_score.py        → Azure ML endpoint scoring entry point
+├── deploy_azure_ml.py       → Azure ML managed endpoint deployment
 └── data/                    → JSON store + CSV exports
 ```
 

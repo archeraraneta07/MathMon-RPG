@@ -35,6 +35,7 @@ Usage:
 """
 
 import json
+import math
 import os
 import random
 import time
@@ -54,6 +55,7 @@ app = Flask(__name__,
             static_url_path='')
 
 processor = PerformanceDataProcessor()
+VALID_CATEGORIES = {'addition', 'subtraction', 'multiplication', 'division'}
 
 # Try to load the ML model; train a fresh one if not found
 try:
@@ -84,22 +86,13 @@ def serve_static(filename):
 def register_player():
     """Register a new player."""
     data = request.get_json() or {}
-    name = data.get('name', 'New Trainer')
+    name = str(data.get('name', 'New Trainer')).strip()[:100] or 'New Trainer'
     gender = data.get('gender', 'male')
+    if gender not in {'male', 'female'}:
+        return jsonify({'success': False, 'message': 'gender must be male or female'}), 400
 
-    player_id = str(int(time.time()))
-
-    player = {
-        'player_id': player_id,
-        'name': name,
-        'gender': gender,
-        'level': 1,
-        'xp': 0,
-        'score': 0,
-        'total_battles': 0,
-        'battles_won': 0,
-        'created_at': datetime.utcnow().isoformat()
-    }
+    player_id = str(data.get('player_id') or int(time.time()))
+    player = processor.register_player(player_id, name=name, gender=gender)
 
     return jsonify({
         'success': True,
@@ -148,7 +141,12 @@ def start_battle():
     category = data.get('category', random.choice(
         ['addition', 'subtraction', 'multiplication', 'division']
     ))
-    level = data.get('level', 1)
+    if category not in VALID_CATEGORIES:
+        return jsonify({'success': False, 'message': 'Invalid mathematics category.'}), 400
+    try:
+        level = max(1, min(15, int(data.get('level', 1))))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'level must be an integer.'}), 400
 
     try:
         import json as json_module
@@ -213,11 +211,16 @@ def submit_battle_result(battle_id):
     """Submit battle results and update player stats."""
     data = request.get_json() or {}
     player_id = data.get('player_id', '1')
-    won = data.get('won', False)
-    xp_earned = data.get('xp_earned', 0)
-    score_earned = data.get('score_earned', 0)
-    opponent_name = data.get('opponent_name', 'Unknown')
+    won = bool(data.get('won', False))
+    try:
+        xp_earned = max(0, int(data.get('xp_earned', 0)))
+        score_earned = max(0, int(data.get('score_earned', 0)))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'Rewards must be integers.'}), 400
+    opponent_name = str(data.get('opponent_name', 'Unknown')).strip()[:100] or 'Unknown'
     category = data.get('category', 'addition')
+    if category not in VALID_CATEGORIES:
+        return jsonify({'success': False, 'message': 'Invalid mathematics category.'}), 400
 
     processor.record_battle(player_id, won, xp_earned, score_earned, opponent_name, category)
 
@@ -237,9 +240,18 @@ def record_attempt():
     data = request.get_json() or {}
     player_id = data.get('player_id', '1')
     category = data.get('category', 'addition')
+    if category not in VALID_CATEGORIES:
+        return jsonify({'success': False, 'message': 'Invalid mathematics category.'}), 400
     correct = data.get('correct', False)
-    response_time = data.get('response_time', 0)
-    difficulty = data.get('difficulty', 1)
+    if not isinstance(correct, bool):
+        return jsonify({'success': False, 'message': 'correct must be a boolean.'}), 400
+    try:
+        response_time = float(data.get('response_time', 0))
+        difficulty = max(1, min(10, int(data.get('difficulty', 1))))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'Invalid response time or difficulty.'}), 400
+    if not math.isfinite(response_time) or not 0 <= response_time <= 120:
+        return jsonify({'success': False, 'message': 'response_time must be between 0 and 120 seconds.'}), 400
     answer_given = data.get('answer_given')
     correct_answer = data.get('correct_answer')
     battle_id = data.get('battle_id')

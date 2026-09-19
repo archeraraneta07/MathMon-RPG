@@ -14,6 +14,7 @@
 - [Quick Start](#quick-start)
 - [Game Mechanics](#game-mechanics)
 - [Machine Learning](#machine-learning)
+- [Study Objective Coverage](#study-objective-coverage)
 - [Database Schema](#database-schema)
 - [API Reference](#api-reference)
 
@@ -94,11 +95,19 @@ MathMon/
 │   ├── data_processor.py   # Pandas-based performance data processing
 │   ├── server.py           # Flask REST API server
 │   ├── questions.py        # Python question generator (for API use)
+│   ├── azure_ml_score.py   # Azure ML online endpoint scoring entry point
+│   ├── deploy_azure_ml.py  # Azure ML managed endpoint deployment script
 │   └── data/               # Player performance JSON store + CSV exports
 ├── database/
 │   └── schema.sql          # Full MySQL schema with triggers, views, procedures
 ├── assets/
 │   └── monsters.json       # Monster data (JSON)
+├── docs/
+│   └── TEST_PLAN.md        # White-box, black-box, and usability test plan
+├── tests/
+│   ├── test_data_pipeline.py # Pandas and ML feature tests
+│   └── test_api_contract.py  # Flask API contract tests
+├── requirements.txt        # Python and test dependencies
 ├── README.md               # This file
 └── AGENTS.md               # Development agent guidance
 ```
@@ -124,6 +133,66 @@ The game runs entirely in the browser using `localStorage` for save data.
 
 The local server makes asset loading consistent by serving JavaScript, CSS,
 JSON, SVG, and HTML with their correct MIME types.
+
+### Share the Game Through a URL
+
+For students on the same Wi-Fi or wired network, run the Flask server because
+it serves both the game and the ML API:
+
+```powershell
+cd python
+python server.py
+```
+
+Find the host computer's local IPv4 address with `ipconfig`, for example
+`192.168.1.25`, then students open:
+
+```text
+http://192.168.1.25:5000
+```
+
+Allow Python through Windows Firewall when prompted. The host computer must
+remain powered on and connected to the same network. The Flask server already
+binds to `0.0.0.0`, which permits other devices to connect.
+
+The PowerShell server is useful for frontend-only classroom testing:
+
+```powershell
+./server.ps1 -BindAddress +
+```
+
+This serves the game at `http://<HOST-COMPUTER-IP>:5000`, but server-side ML
+endpoints require the Flask server.
+
+For students outside the local network, deploy the Flask application to a
+public Python host such as Azure App Service, Render, or Railway. The public
+HTTPS address supplied by that host becomes the student URL. Do not expose the
+development server directly to the public internet; configure HTTPS, secrets,
+authentication, and a production WSGI server first.
+
+#### Render Deployment
+
+This repository includes `render.yaml` for a repeatable Render deployment.
+
+1. Push the MathMon project to a GitHub repository.
+2. Create an account at [Render](https://render.com) and select **New > Blueprint**.
+3. Connect the GitHub repository and select `render.yaml`.
+4. Create the web service and wait for the build to finish.
+5. Open the generated HTTPS address, for example `https://mathmon.onrender.com`.
+6. Share that address with students.
+
+The deployment uses Gunicorn and starts `python/server.py` through the Flask
+application object. Render checks `/api/health` after deployment. The free
+service may sleep when unused, so the first request after inactivity can take
+longer.
+
+For a manual Render setup, use:
+
+```text
+Build command: pip install -r requirements.txt
+Start command: gunicorn --chdir python --bind 0.0.0.0:$PORT server:app
+Health check:  /api/health
+```
 
 ### Option 2: Run with Flask Backend + ML
 
@@ -219,18 +288,43 @@ python ml_model.py predict --player-id 1  # Classify a player
 
 ### Azure Machine Learning Integration
 
-The model can be deployed to Azure ML:
+The trained model can be deployed to an Azure ML managed online endpoint. The
+deployment is optional and requires an Azure subscription, workspace, and
+authenticated CLI session:
 
 ```python
-from azure.ai.ml import MLClient
-from azure.identity import DefaultAzureCredential
+pip install azure-ai-ml azure-identity
+cd python
+python ml_model.py train
+az login
+$env:AZURE_SUBSCRIPTION_ID = "<subscription-id>"
+$env:AZURE_RESOURCE_GROUP = "<resource-group>"
+$env:AZURE_ML_WORKSPACE = "<workspace-name>"
+$env:AZURE_ML_ENDPOINT = "mathmon-classifier"
+python deploy_azure_ml.py
+```
 
-ml_client = MLClient(
-    DefaultAzureCredential(),
-    subscription_id="<your-subscription-id>",
-    resource_group_name="<your-resource-group>",
-    workspace_name="<your-workspace-name>"
-)
+The script publishes `mathmon_model.joblib` with the same feature contract as
+the Flask service. Azure resources and credentials are intentionally supplied
+by the deployment environment rather than stored in the repository.
+
+## Study Objective Coverage
+
+| Objective | Implementation status | Evidence |
+|-----------|----------------------|----------|
+| Web-based mathematics RPG | Implemented | Phaser scenes, trainer selection, world exploration, battles, scoring, XP, and levels in `js/phaser-game.js` |
+| ML performance classification | Implemented | Pandas feature preparation and scikit-learn Random Forest in `python/data_processor.py` and `python/ml_model.py` |
+| Four operations and leveled questions | Implemented | JavaScript and Python generators support addition, subtraction, multiplication, and division across ten difficulty levels |
+| MySQL data model | Implemented at schema level; optional runtime integration | `database/schema.sql` defines players, sessions, battles, attempts, summaries, and ML classifications; the default lightweight runtime uses JSON storage |
+| Personalized recommendations | Implemented | Classification-specific and weakest-topic recommendations in `python/ml_model.py` and `js/ml.js` |
+| Azure ML deployment | Deployment-ready | `python/azure_ml_score.py` and `python/deploy_azure_ml.py`; requires the researcher's Azure subscription and credentials |
+| System testing | Automated foundation implemented | `tests/test_data_pipeline.py` provides white-box feature tests and `tests/test_api_contract.py` provides black-box API tests; usability testing remains a scheduled human evaluation activity |
+
+Run the automated tests after installing the Python dependencies:
+
+```bash
+pip install -r requirements.txt
+pytest -q
 ```
 
 ---

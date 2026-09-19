@@ -1,0 +1,9 @@
+pandas
+numpy
+scikit-learn
+joblib
+flask
+pytest
+azure-ai-ml
+azure-identity
+gunicorn

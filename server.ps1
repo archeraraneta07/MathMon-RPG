@@ -1,4 +1,9 @@
-$port = 5000
+param(
+    [int]$Port = 5000,
+    [string]$BindAddress = 'localhost'
+)
+
+$port = $Port
 $root = Get-Location
 $contentTypes = @{
     '.css' = 'text/css; charset=utf-8'
@@ -9,9 +14,14 @@ $contentTypes = @{
     '.svg' = 'image/svg+xml'
 }
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add("http://localhost:$port/")
+$listener.Prefixes.Add("http://$BindAddress`:$port/")
 $listener.Start()
-Write-Output "Server running at http://localhost:$port"
+if ($BindAddress -eq 'localhost') {
+    Write-Output "Server running at http://localhost:$port"
+} else {
+    Write-Output "Server listening on http://$BindAddress`:$port"
+    Write-Output "Students can open http://<HOST-COMPUTER-IP>:$port"
+}
 while ($listener.IsListening) {
     $context = $listener.GetContext()
     $path = $context.Request.Url.AbsolutePath
