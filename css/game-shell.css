@@ -49,7 +49,7 @@ canvas {
 #mobile-input-wrap {
     position: fixed;
     right: 12px;
-    bottom: max(12px, env(safe-area-inset-bottom));
+    bottom: max(72px, calc(24px + env(safe-area-inset-bottom)));
     left: 12px;
     z-index: 10;
     display: flex;
@@ -61,6 +61,10 @@ canvas {
     border-radius: 8px;
     background: rgba(24, 32, 43, 0.96);
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+#mobile-input-wrap[hidden] {
+    display: none !important;
 }
 
 #mobile-input {
@@ -90,7 +94,7 @@ canvas {
 
 @media (min-width: 700px) and (pointer: coarse) {
     #mobile-input-wrap {
-        bottom: 18px;
+        bottom: max(28px, env(safe-area-inset-bottom));
         max-width: 480px;
     }
 }
