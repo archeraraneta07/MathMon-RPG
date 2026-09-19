@@ -307,6 +307,7 @@
         create() {
             this.cameras.main.setBackgroundColor('#1a1424');
             SoundManager.bindToggle(this);
+            if (window.MathMonMobile) window.MathMonMobile.hide();
 
             const cx = this.cameras.main.width / 2;
             const cy = this.cameras.main.height / 2;
@@ -317,7 +318,25 @@
             this.add.text(cx, cy + 112, 'M: MUSIC ON / OFF', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'10px', color:'#80cbc4' }).setOrigin(0.5);
 
             const saved = loadProfile();
-            const prompt = this.add.text(cx, cy + 70, saved ? 'PRESS ENTER TO CONTINUE' : 'PRESS ENTER TO START', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'16px', color:'#ffffff' }).setOrigin(0.5);
+            const prompt = this.add.text(cx, cy + 70, saved ? 'PRESS ENTER TO CONTINUE' : 'PRESS ENTER TO START', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'16px', color:'#ffffff' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+            const startAdventure = () => {
+                if (this.starting) return;
+                this.starting = true;
+                if (window.MathMonMobile) window.MathMonMobile.hide();
+                SoundManager.playSelect();
+                SoundManager.startMusic();
+                this.cameras.main.fadeOut(400, 0, 0, 0);
+                this.time.delayedCall(400, () => {
+                    if (saved && saved.playerName && saved.stats) {
+                        this.scene.start('OverworldScene', saved);
+                    } else {
+                        this.scene.start('CharacterSelectScene');
+                    }
+                });
+            };
+            prompt.on('pointerdown', startAdventure);
+            prompt.on('pointerover', () => prompt.setColor('#ffd740'));
+            prompt.on('pointerout', () => prompt.setColor('#ffffff'));
 
             this.tweens.add({
                 targets: prompt, alpha: 0.2, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
@@ -333,18 +352,7 @@
                 this.tweens.add({ targets: sprite, alpha: 0.6, duration: 1500 + i * 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
             }
 
-            this.input.keyboard.once('keydown-ENTER', () => {
-                SoundManager.playSelect();
-                SoundManager.startMusic();
-                this.cameras.main.fadeOut(400, 0, 0, 0);
-                this.time.delayedCall(400, () => {
-                    if (saved && saved.playerName && saved.stats) {
-                        this.scene.start('OverworldScene', saved);
-                    } else {
-                        this.scene.start('CharacterSelectScene');
-                    }
-                });
-            });
+            this.input.keyboard.once('keydown-ENTER', startAdventure);
         }
     }
 
