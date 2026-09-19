@@ -186,6 +186,11 @@ application object. Render checks `/api/health` after deployment. The free
 service may sleep when unused, so the first request after inactivity can take
 longer.
 
+The game is responsive for phones and tablets. Touch users receive a native
+trainer-name field and answer field with mobile numeric input; desktop users
+can continue using the keyboard. Test the deployed URL in both portrait and
+landscape orientations after each frontend deployment.
+
 For a manual Render setup, use:
 
 ```text

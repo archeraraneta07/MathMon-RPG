@@ -46,6 +46,55 @@ canvas {
     transform: translate(-50%, -50%);
 }
 
+#mobile-input-wrap {
+    position: fixed;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 12px;
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 8px;
+    border: 2px solid #ffd740;
+    border-radius: 8px;
+    background: rgba(24, 32, 43, 0.96);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+#mobile-input {
+    min-width: 0;
+    flex: 1;
+    border: 1px solid #80cbc4;
+    border-radius: 4px;
+    padding: 10px 12px;
+    background: #101820;
+    color: #ffffff;
+    font: 700 18px 'Atkinson Hyperlegible', sans-serif;
+}
+
+#mobile-submit {
+    min-width: 88px;
+    border: 0;
+    border-radius: 4px;
+    padding: 10px 14px;
+    background: #ffd740;
+    color: #17202a;
+    font: 700 16px 'Atkinson Hyperlegible', sans-serif;
+}
+
+#mobile-submit:active {
+    background: #ffb300;
+}
+
+@media (min-width: 700px) and (pointer: coarse) {
+    #mobile-input-wrap {
+        bottom: 18px;
+        max-width: 480px;
+    }
+}
+
 #error {
     top: 55%;
     z-index: 3;

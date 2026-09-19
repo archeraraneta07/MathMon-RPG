@@ -410,9 +410,10 @@
                 this.nameText.setText(this.nameInput || '_');
             });
 
-            this.input.keyboard.once('keydown-ENTER', () => {
+            const startGame = () => {
                 SoundManager.playSelect();
                 const name = this.nameInput.trim() || (this.gender === 'female' ? 'Maya' : 'Leo');
+                if (window.MathMonMobile) window.MathMonMobile.hide();
                 const stats = createFreshStats();
                 persistProfile(this.gender, name, stats);
                 if (window.MathMonApi) window.MathMonApi.registerPlayer(name, this.gender);
@@ -422,6 +423,16 @@
                     playerName: name,
                     stats: stats
                 }));
+            };
+            this.input.keyboard.once('keydown-ENTER', startGame);
+
+            if (window.MathMonMobile) window.MathMonMobile.show({
+                placeholder: 'Enter trainer name',
+                submitLabel: 'Start',
+                onSubmit: (value) => {
+                    this.nameInput = value.trim().slice(0, 12);
+                    startGame();
+                }
             });
         }
     }
@@ -827,6 +838,18 @@
                 this.answerText.setText(this.inputText ? `${this.inputText} |` : 'Type your answer  |');
             });
 
+            if (window.MathMonMobile) window.MathMonMobile.show({
+                type: 'text',
+                inputMode: 'decimal',
+                placeholder: 'Type your answer',
+                submitLabel: 'Answer',
+                onSubmit: (value) => {
+                    this.inputText = value.trim();
+                    this.answerText.setText(this.inputText ? `${this.inputText} |` : 'Type your answer  |');
+                    this.submitAnswer();
+                }
+            });
+
             this.nextQuestion();
         }
 
@@ -999,6 +1022,7 @@
 
         endBattle(won) {
             let xp = 0, score = 0;
+            if (window.MathMonMobile) window.MathMonMobile.hide();
             if (this.mode !== 'training') {
                 if (won) {
                     xp = Math.round(50 * (1 + this.stats.level * 0.1));
