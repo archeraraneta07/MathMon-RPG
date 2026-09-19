@@ -1,0 +1,98 @@
+const MONSTER_DATA = [
+  {
+    id: "add_1",
+    name: "Pluspy",
+    type: "addition",
+    level: 1,
+    hp: 30,
+    attack: 8,
+    defense: 5,
+    description: "A friendly fire-bodied monster that loves addition problems.",
+    sprite: "🔥🧮",
+    color: "#FF6B35"
+  },
+  {
+    id: "add_2",
+    name: "Sumslime",
+    type: "addition",
+    level: 2,
+    hp: 45,
+    attack: 12,
+    defense: 8,
+    description: "A gelatinous creature formed from adding numbers together.",
+    sprite: "🟢➕",
+    color: "#4CAF50"
+  },
+  {
+    id: "sub_1",
+    name: "Minusquid",
+    type: "subtraction",
+    level: 1,
+    hp: 30,
+    attack: 7,
+    defense: 5,
+    description: "A cool blue monster that subtracts from your confidence... then builds it back.",
+    sprite: "🌀➖",
+    color: "#2196F3"
+  },
+  {
+    id: "sub_2",
+    name: "Diffdrake",
+    type: "subtraction",
+    level: 2,
+    hp: 45,
+    attack: 13,
+    defense: 8,
+    description: "A wise dragon that knows the difference between right and wrong answers.",
+    sprite: "🟦🐉",
+    color: "#1976D2"
+  },
+  {
+    id: "mul_1",
+    name: "Timeshell",
+    type: "multiplication",
+    level: 1,
+    hp: 30,
+    attack: 9,
+    defense: 5,
+    description: "A swift turtle whose shell multiplies your speed.",
+    sprite: "🟡🐢",
+    color: "#FFC107"
+  },
+  {
+    id: "mul_2",
+    name: "Productrus",
+    type: "multiplication",
+    level: 2,
+    hp: 50,
+    attack: 14,
+    defense: 9,
+    description: "A citrusy beast that amplifies the product of your efforts.",
+    sprite: "🟧🍋",
+    color: "#FF9800"
+  },
+  {
+    id: "div_1",
+    name: "Splitling",
+    type: "division",
+    level: 1,
+    hp: 30,
+    attack: 8,
+    defense: 5,
+    description: "A small creature that splits problems into manageable pieces.",
+    sprite: "🟣✂️",
+    color: "#9C27B0"
+  },
+  {
+    id: "div_2",
+    name: "Quotientail",
+    type: "division",
+    level: 2,
+    hp: 50,
+    attack: 13,
+    defense: 9,
+    description: "A tail-wagging companion that divides and conquers every challenge.",
+    sprite: "🟪🦊",
+    color: "#7B1FA2"
+  }
+];
