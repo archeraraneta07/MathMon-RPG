@@ -359,6 +359,7 @@
             const startAdventure = () => {
                 if (this.starting) return;
                 this.starting = true;
+                if (window.MathMonMobile) window.MathMonMobile.requestLandscape();
                 if (window.MathMonMobile) window.MathMonMobile.hide();
                 SoundManager.playSelect();
                 SoundManager.startMusic();
@@ -604,15 +605,18 @@
 
             this.touchDirection = { x: 0, y: 0 };
             const touchButton = (label, x, y, direction, action) => {
-                const button = this.add.rectangle(x, y, 42, 32, 0x111827, 0.8).setStrokeStyle(2, 0xffffff).setScrollFactor(0).setDepth(20);
+                const button = this.add.rectangle(x, y, 52, 44, 0x111827, 0.86).setStrokeStyle(2, 0xffffff).setScrollFactor(0).setDepth(20);
                 this.add.text(x, y, label, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'14px', color:'#ffffff' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-                button.setInteractive({ useHandCursor: true });
+                button.setInteractive({ useHandCursor: true, draggable: false });
                 button.on('pointerdown', () => {
                     if (action) action();
                     if (direction) this.touchDirection = direction;
                 });
-                button.on('pointerup', () => { this.touchDirection = { x: 0, y: 0 }; });
-                button.on('pointerout', () => { this.touchDirection = { x: 0, y: 0 }; });
+                const release = () => { this.touchDirection = { x: 0, y: 0 }; };
+                button.on('pointerup', release);
+                button.on('pointerout', release);
+                button.on('pointerupoutside', release);
+                button.on('pointercancel', release);
             };
             const padX = this.cameras.main.width - 82;
             const padY = this.cameras.main.height - 76;
@@ -623,6 +627,7 @@
             touchButton('T', 54, this.cameras.main.height - 68, null, () => this.startTraining());
             touchButton('G', 54, this.cameras.main.height - 30, null, () => this.startGymBattle());
             touchButton('H', 126, this.cameras.main.height - 68, null, () => this.tryEnterHouse());
+            this.input.on('pointerup', () => { this.touchDirection = { x: 0, y: 0 }; });
 
             this.time.delayedCall(1000, () => {
                 const prompt = this.add.text(this.cameras.main.width/2, this.cameras.main.height - 40, 'Press G to challenge Gym', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'14px', color:'#ffd740' }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
@@ -1460,9 +1465,10 @@
                     scene: [BootScene, TitleScene, CharacterSelectScene, NameEntryScene, OverworldScene, BattleScene, ResultsScene, HouseInteriorScene, TrainingScene],
                     scale: {
                         mode: Phaser.Scale.FIT,
-                        autoCenter: Phaser.Scale.CENTER_BOTH
+                        autoCenter: Phaser.Scale.CENTER_BOTH,
+                        expandParent: true
                     },
-                    input: { keyboard: true },
+                    input: { keyboard: true, activePointers: 3 },
                     render: {
                         antialias: true,
                         pixelArt: false,

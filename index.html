@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>MathMon Quest - Math RPG</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,6 +12,11 @@
 </head>
 <body>
     <div id="game-container">
+        <div id="orientation-lock" role="status" aria-live="polite">
+            <div class="orientation-lock__icon" aria-hidden="true">&#8635;</div>
+            <strong>Rotate your device</strong>
+            <span>MathMon gameplay works best in landscape.</span>
+        </div>
         <div id="loading">Loading MathMon Quest...<br><span id="load-status">Initializing...</span></div>
         <div id="error"></div>
         <div id="mobile-input-wrap" hidden>

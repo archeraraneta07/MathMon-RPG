@@ -16,6 +16,50 @@ body {
     width: 100vw;
     height: 100vh;
     overflow: hidden;
+    touch-action: none;
+}
+
+#orientation-lock {
+    display: none;
+}
+
+@media (orientation: portrait) and (max-width: 900px) and (pointer: coarse) {
+    body.gameplay-landscape #orientation-lock {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 10px;
+        padding: 24px;
+        background: #17202a;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    body.gameplay-landscape #orientation-lock strong {
+        color: #ffd740;
+        font-size: 22px;
+    }
+
+    body.gameplay-landscape #orientation-lock span {
+        max-width: 280px;
+        color: #d7ccc8;
+        font-size: 16px;
+    }
+
+    #orientation-lock {
+        display: none;
+    }
+
+    .orientation-lock__icon {
+        color: #ffd740;
+        font-size: 52px;
+        line-height: 1;
+    }
+
 }
 
 canvas {
@@ -86,6 +130,7 @@ canvas {
     background: #ffd740;
     color: #17202a;
     font: 700 16px 'Atkinson Hyperlegible', sans-serif;
+    touch-action: manipulation;
 }
 
 #mobile-submit:active {

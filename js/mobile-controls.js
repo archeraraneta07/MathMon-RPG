@@ -11,6 +11,23 @@
         return navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
     }
 
+    function requestLandscape() {
+        if (!isTouchDevice()) return Promise.resolve(false);
+        document.body.classList.add('gameplay-landscape');
+        const orientation = screen.orientation;
+        const container = document.getElementById('game-container');
+        const enterFullscreen = document.fullscreenElement || !container || !container.requestFullscreen
+            ? Promise.resolve()
+            : container.requestFullscreen().catch(() => undefined);
+
+        return enterFullscreen.then(() => {
+            if (orientation && orientation.lock) {
+                return orientation.lock('landscape').then(() => true).catch(() => false);
+            }
+            return false;
+        });
+    }
+
     function show(options) {
         if (!isTouchDevice()) return;
         control.type = options.type || 'text';
@@ -45,5 +62,5 @@
     });
     submit.addEventListener('click', submitValue);
 
-    window.MathMonMobile = { show, hide, isTouchDevice };
+    window.MathMonMobile = { show, hide, isTouchDevice, requestLandscape };
 })();
