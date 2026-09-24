@@ -1205,15 +1205,24 @@
                 this.add.text(cw/2, cy + 80, badgeText, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'16px', color: badgeColor }).setOrigin(0.5);
             }
 
-            const cont = this.add.text(cw/2, cy + 120, 'PRESS ENTER TO CONTINUE', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'18px', color:'#ffffff' }).setOrigin(0.5);
+            const cont = this.add.text(cw/2, cy + 120, 'TOUCH TO CONTINUE', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'18px', color:'#ffffff' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
             this.tweens.add({ targets: cont, alpha: 0.2, duration: 700, yoyo: true, repeat: -1, ease:'Sine.easeInOut' });
 
             let returnScene = 'OverworldScene';
             let returnData = { gender: this.gender, playerName: this.playerName, stats: this.stats, world: this.world };
+            const continueToWorld = () => {
+                if (this.leaving) return;
+                this.leaving = true;
+                this.cameras.main.fadeOut(300, 0, 0, 0);
+                this.time.delayedCall(300, () => this.scene.start(returnScene, returnData));
+            };
+            cont.on('pointerdown', continueToWorld);
 
             if (this.mode === 'training') {
-                const retrain = this.add.text(cw/2, cy + 160, 'Press T to Train Again', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'16px', color:'#ffd740' }).setOrigin(0.5);
-                this.input.keyboard.once('keydown-T', () => {
+                const retrain = this.add.text(cw/2, cy + 160, 'TOUCH TO TRAIN AGAIN', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'16px', color:'#ffd740' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+                const trainAgain = () => {
+                    if (this.leaving) return;
+                    this.leaving = true;
                     this.cameras.main.fadeOut(200, 0, 0, 0);
                     this.time.delayedCall(200, () => this.scene.start('TrainingScene', {
                         gender: this.gender,
@@ -1222,13 +1231,12 @@
                         category: this.trainingCategory,
                         world: this.world
                     }));
-                });
+                };
+                retrain.on('pointerdown', trainAgain);
+                this.input.keyboard.once('keydown-T', trainAgain);
             }
 
-            this.input.keyboard.once('keydown-ENTER', () => {
-                this.cameras.main.fadeOut(300, 0, 0, 0);
-                this.time.delayedCall(300, () => this.scene.start(returnScene, returnData));
-            });
+            this.input.keyboard.once('keydown-ENTER', continueToWorld);
         }
     }
 
