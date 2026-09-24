@@ -93,7 +93,7 @@ canvas {
 #mobile-input-wrap {
     position: fixed;
     right: 12px;
-    bottom: max(96px, calc(12vh + env(safe-area-inset-bottom)));
+    bottom: max(6px, env(safe-area-inset-bottom));
     left: 12px;
     z-index: 10;
     display: flex;
@@ -139,7 +139,7 @@ canvas {
 
 @media (min-width: 700px) and (pointer: coarse) {
     #mobile-input-wrap {
-        bottom: max(28px, env(safe-area-inset-bottom));
+        bottom: max(6px, env(safe-area-inset-bottom));
         max-width: 480px;
     }
 }

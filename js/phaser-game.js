@@ -909,6 +909,10 @@
             this.add.text(cw/2 - (cw - 100) / 2, ch * 0.86, 'ANSWER', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'14px', color:'#80cbc4' }).setOrigin(0, 0.5);
             this.answerBox = this.add.rectangle(cw/2, ch * 0.93, cw - 100, 34, 0x18202b, 1).setStrokeStyle(2, 0xffd740);
             this.answerText = this.add.text(cw/2, ch * 0.93, 'Type your answer  |', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'20px', color:'#ffd740' }).setOrigin(0.5);
+            if (window.MathMonMobile && window.MathMonMobile.isTouchDevice()) {
+                this.answerBox.setVisible(false);
+                this.answerText.setVisible(false);
+            }
 
             this.inputText = '';
             this.isPlayerTurn = true;
