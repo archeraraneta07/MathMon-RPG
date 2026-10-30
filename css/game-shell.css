@@ -1,11 +1,73 @@
+/* ==========================================================================
+   MathMon design tokens — shared by every screen.
+   js/ui-theme.js writes the same values from MathMonTheme.TOKENS at start-up
+   and switches the --mm-theme-* accent when the partner element changes
+   (Phaser scenes read the same tokens from JS). Keep the two in sync.
+   ========================================================================== */
+:root {
+    --mm-bg-primary: #1a1625;
+    --mm-bg-deep: #120f1a;
+    --mm-panel: #0d0a14;
+    --mm-panel-hi: #1b1529;
+    --mm-line-color: #3d3356;
+    --mm-title-color: #ffd740;
+    --mm-text-color: #ffffff;
+    --mm-muted-color: #b9b0cc;
+    --mm-border-w: 3px;
+    --mm-font-pixel: 'Press Start 2P', monospace;
+    --mm-font-body: 'Atkinson Hyperlegible', sans-serif;
+    /* element accent: neutral gold until a partner monster is chosen */
+    --mm-theme-accent: #ffd740;
+    --mm-theme-glow: #fff3b0;
+    --mm-theme-deep: #2a2140;
+    transition: --mm-theme-accent 0.8s ease, --mm-theme-glow 0.8s ease, --mm-theme-deep 0.8s ease;
+}
+
+/* Registered so the accent colors animate smoothly on a re-theme. */
+@property --mm-theme-accent { syntax: '<color>'; inherits: true; initial-value: #ffd740; }
+@property --mm-theme-glow { syntax: '<color>'; inherits: true; initial-value: #fff3b0; }
+@property --mm-theme-deep { syntax: '<color>'; inherits: true; initial-value: #2a2140; }
+
 html,
 body {
     margin: 0;
     padding: 0;
     height: 100%;
     overflow: hidden;
-    background: #1a1424;
-    font-family: 'Atkinson Hyperlegible', sans-serif;
+    background: var(--mm-bg-primary);
+    font-family: var(--mm-font-body);
+}
+
+/* ---- Ambient element particles (js/ui-theme.js) ------------------------------
+   Low-resolution canvas scaled up with pixelated sampling: every particle is a
+   chunky pixel. Above the 3D battle stage (z 2), under the battle HUD (z 5). */
+canvas.mm-ambient {
+    position: absolute;
+    z-index: 3;
+    margin: 0;
+    box-shadow: none;
+    pointer-events: none;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+/* Soft accent sweep when the theme changes element */
+.mm-theme-wash {
+    position: absolute;
+    z-index: 4;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--wash) 55%, transparent), transparent 70%);
+    animation: mm-theme-wash 1s ease-out forwards;
+}
+
+@keyframes mm-theme-wash {
+    0% { opacity: 0; }
+    30% { opacity: 0.8; }
+    100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mm-theme-wash { animation-duration: 0.01s; }
 }
 
 #game-container {
@@ -268,22 +330,22 @@ canvas.mm-title3d.is-visible { opacity: 1; }
     gap: 0.1em;
     min-height: 44px;
     padding: 0.55em 1em;
-    border: 2px solid rgba(255, 215, 64, 0.55);
-    border-radius: 0.8em;
-    background: rgba(12, 16, 30, 0.78);
+    border: var(--mm-border-w) solid color-mix(in srgb, var(--mm-theme-accent) 70%, transparent);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--mm-panel) 85%, transparent);
     color: #fff;
     cursor: pointer;
     backdrop-filter: blur(6px);
     transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.15s, background 0.15s, border-color 0.15s;
 }
 
-.mm-title__btn-label { font-size: 1.15em; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.mm-title__btn-label { font-family: var(--mm-font-pixel); font-size: 0.8em; line-height: 1.6; text-transform: uppercase; }
 .mm-title__btn-sub { color: #cbd5e1; font-size: 0.78em; }
 
 .mm-title__btn--primary {
-    border-color: transparent;
+    border-color: #8a5a00;
     background: linear-gradient(180deg, #ffe57f, var(--gold) 55%, #f0a020);
-    box-shadow: 0 0.3em 0 #8a5a00, 0 0.6em 1.4em rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0.3em 0 #000000, 0 0.6em 1.4em rgba(0, 0, 0, 0.5);
     color: #24160a;
 }
 
@@ -477,9 +539,9 @@ canvas.mm-title3d.is-visible { opacity: 1; }
     max-width: 560px;
     margin: 0 auto;
     padding: 8px;
-    border: 2px solid #ffd740;
-    border-radius: 8px;
-    background: rgba(24, 32, 43, 0.96);
+    border: var(--mm-border-w) solid var(--mm-theme-accent);
+    border-radius: 0;
+    background: var(--mm-panel);
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
 }
 
@@ -501,11 +563,11 @@ canvas.mm-title3d.is-visible { opacity: 1; }
 #mobile-submit {
     min-width: 88px;
     border: 0;
-    border-radius: 4px;
+    border-radius: 0;
     padding: 10px 14px;
-    background: #ffd740;
-    color: #17202a;
-    font: 700 16px 'Atkinson Hyperlegible', sans-serif;
+    background: var(--mm-theme-accent);
+    color: var(--mm-panel);
+    font: 12px var(--mm-font-pixel);
     touch-action: manipulation;
 }
 

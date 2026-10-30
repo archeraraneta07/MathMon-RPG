@@ -32,8 +32,14 @@ const MathMonBattleVfx = (function createBattleVfx() {
     const THEMES = {
         grass: { sky: ['#4aa3e0', '#c4ecff'], floor: ['#7cc47a', '#2b6e33'], far: '#3d8a4c', grid: 'rgba(255,255,255,0.10)' },
         cave:  { sky: ['#140c33', '#3b2878'], floor: ['#4a3a8c', '#160f36'], far: '#251a52', grid: 'rgba(160,220,255,0.12)' },
-        water: { sky: ['#3fb5ef', '#e3f6ff'], floor: ['#efd79c', '#b88f4f'], far: '#1e7fd6', grid: 'rgba(120,80,30,0.12)' }
+        water: { sky: ['#3fb5ef', '#e3f6ff'], floor: ['#efd79c', '#b88f4f'], far: '#1e7fd6', grid: 'rgba(120,80,30,0.12)' },
+        // element arenas (MathMonTheme: the partner's element themes the battlefield)
+        volcano: { sky: ['#1a0a0e', '#8a2a14'], floor: ['#4a2a22', '#170b0c'], far: '#2a0f0c', grid: 'rgba(255,120,40,0.16)' },
+        ocean:   { sky: ['#06213f', '#1f6fb8'], floor: ['#1b4f7a', '#071a33'], far: '#0b3a66', grid: 'rgba(150,220,255,0.12)' },
+        sky:     { sky: ['#1b2a3a', '#7fb5c4'], floor: ['#5f8f86', '#1d3b39'], far: '#2f5560', grid: 'rgba(230,255,250,0.12)' },
+        rocky:   { sky: ['#2a1f1a', '#b07a45'], floor: ['#7a5a3a', '#2e2013'], far: '#4a3524', grid: 'rgba(255,220,150,0.10)' }
     };
+    const JAGGED = { cave: true, volcano: true, rocky: true };
 
     function createArena(scene, theme) {
         const w = scene.cameras.main.width;
@@ -56,7 +62,7 @@ const MathMonBattleVfx = (function createBattleVfx() {
             ctx.beginPath();
             ctx.moveTo(0, horizon);
             for (let x = 0; x <= w; x += 40) {
-                const peak = theme === 'water' ? 6 : theme === 'cave' ? (x / 40) % 2 ? 46 : 18 : 26 + Math.sin(x * 0.012) * 18;
+                const peak = theme === 'water' || theme === 'ocean' ? 6 : JAGGED[theme] ? (x / 40) % 2 ? 46 : 18 : 26 + Math.sin(x * 0.012) * 18;
                 ctx.lineTo(x, horizon - peak);
             }
             ctx.lineTo(w, horizon);

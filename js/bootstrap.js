@@ -19,6 +19,7 @@
                 if (loading) loading.style.display = 'none';
                 console.log('[MathMon] creating Phaser game...');
                 const game = MathMonPhaser.createGame('game-container');
+                window.mathmonGame = game;   // console diagnostics (see AGENTS.md)
                 console.log('[MathMon] Phaser game created:', game);
             }
         }

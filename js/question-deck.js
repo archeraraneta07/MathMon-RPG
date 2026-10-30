@@ -63,19 +63,30 @@ const MathMonQuestionDeck = (function createQuestionDeck() {
         return `Think: ${b} × ? = ${a}`;
     }
 
-    /** Build one question from a tier's rules. */
-    function generate(tierName, tiers, onlyOp) {
+    /**
+     * Stretch or shrink a [min, max] range for adaptive difficulty (js/adaptive-ml.js):
+     * scale < 1 keeps the low end and pulls the top down, scale > 1 pushes both up.
+     */
+    function scaleRange(range, scale) {
+        if (!scale || scale === 1) return range;
+        const [min, max] = range;
+        if (scale < 1) return [min, Math.max(min, Math.round(min + (max - min) * scale))];
+        return [Math.round(min * (1 + (scale - 1) * 0.5)), Math.round(max * scale)];
+    }
+
+    /** Build one question from a tier's rules (scale: optional adaptive range multiplier). */
+    function generate(tierName, tiers, onlyOp, scale) {
         const tier = tiers[tierName] || tiers.easy;
         for (let attempt = 0; attempt < 25; attempt++) {
             const op = pickWeighted(tier.weights, onlyOp);
             const rule = tier[op];
             let a, b;
             if (op === 'division') {
-                b = randInt(rule.divisor);
-                a = b * randInt(rule.quotient);
+                b = randInt(scaleRange(rule.divisor, scale));
+                a = b * randInt(scaleRange(rule.quotient, scale));
             } else {
-                a = randInt(rule.a);
-                b = randInt(rule.b);
+                a = randInt(scaleRange(rule.a, scale));
+                b = randInt(scaleRange(rule.b, scale));
                 if (op === 'subtraction' && b > a) [a, b] = [b, a];
                 if (op === 'multiplication' && Math.random() < 0.5) [a, b] = [b, a];
             }
@@ -117,26 +128,31 @@ const MathMonQuestionDeck = (function createQuestionDeck() {
 
     /**
      * Next question for a move.
-     * @param {object} opts { tier: 'easy'|'medium'|'hard', category?: op name (training), config: MathMonBattleConfig }
+     * @param {object} opts { tier: 'easy'|'medium'|'hard', category?: op name (training), config: MathMonBattleConfig,
+     *                        adapt?: { op, scale, timerFactor } from MathMonAdaptive.plan() }
      * @returns {{ text, answer, acceptedAnswers, displayAnswer, hint, category, tier, difficulty, timerSeconds, inputMode }}
      */
     function next(opts) {
         const cfg = opts.config;
         const gate = cfg.questionGate;
+        const adapt = opts.adapt || null;
         const tierName = cfg.questionTiers[opts.tier] ? opts.tier : 'easy';
-        const useBank = gate.source === 'bank' || (gate.source === 'mixed' && Math.random() < (gate.mixedBankChance || 0.4));
-        const q = (useBank && drawFromBank(tierName, opts.category)) || generate(tierName, cfg.questionTiers, opts.category);
+        // Adaptive questions are generated (the curated bank has fixed numbers).
+        const useBank = !adapt && (gate.source === 'bank' || (gate.source === 'mixed' && Math.random() < (gate.mixedBankChance || 0.4)));
+        const onlyOp = opts.category || (adapt && adapt.op) || null;
+        const q = (useBank && drawFromBank(tierName, onlyOp)) || generate(tierName, cfg.questionTiers, onlyOp, adapt && adapt.scale);
+        const timer = cfg.questionTiers[tierName].timerSeconds * (adapt && adapt.timerFactor ? adapt.timerFactor : 1);
         return {
             ...q,
             acceptedAnswers: [String(q.answer)],
             displayAnswer: String(q.answer),
             difficulty: TIER_STARS[tierName],
-            timerSeconds: cfg.questionTiers[tierName].timerSeconds,
+            timerSeconds: Math.round(timer),
             inputMode: 'numeric'
         };
     }
 
-    return { next, generate, getBank, OPS };
+    return { next, generate, getBank, scaleRange, OPS };
 })();
 
 if (typeof module !== 'undefined' && module.exports) {

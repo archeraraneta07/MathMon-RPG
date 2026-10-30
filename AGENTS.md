@@ -36,6 +36,17 @@ cd python && python server.py
 # Overworld 3D camera: drag / Z X orbit, wheel / pinch zoom, C reset
 # 3D (battles + overworld) needs http(s): run server.ps1; file:// falls back to 2D
 # Run automated Python coverage with: pytest -q
+
+# Adaptive difficulty (browser console)
+#   MathMonAdaptive.insight()  → what the model learned   MathMonAdaptive.debug() → full state
+#   MathMonAdaptive.reset()    → back to the prior        MathMonTheme.apply('water') → preview a theme
+#   mathmonGame.scene.getScenes(true).map(s => s.scene.key) → active scenes;  mathmonGame.loop.running → loop alive?
+cd python && python adaptive_model.py demo     # train the global model on synthetic data
+
+# Azure Functions API (needs Node 18+ and Azure Functions Core Tools v4)
+cd api && npm install && npm test
+swa start . --api-location api                 # game + API at http://localhost:4280
+# Deployment: see AZURE_DEPLOYMENT.md
 ```
 
 ## Game Architecture
@@ -50,7 +61,10 @@ index.html  (entry point)
 ├── js/monsters.js          → 8 monster definitions
 ├── js/questions.js         → math question generator (4 categories × 10 difficulties)
 ├── js/ml.js                → client-side ML classifier (mirrors Python model)
-├── js/battle-config.js     → MathMonBattleConfig: all battle tuning (gate, answers, hint, MP, damage, elements, monsters, stage3d)
+├── js/ui-theme.js          → MathMonTheme: design tokens, per-element re-theme (apply), ambient particle layer, Phaser UI kit (card/button/dialog/dpad)
+├── js/pixel-art.js         → MathMonPixelArt: grid pixel art → textures (trainer walk sprites, portraits, partner monsters, egg)
+├── js/adaptive-ml.js       → MathMonAdaptive: logistic-regression difficulty model (online + TF.js retrain), plan() / enemyPlan()
+├── js/battle-config.js     → MathMonBattleConfig: all battle tuning (gate, answers, hint, MP, damage, elements, monsters, adaptive, arenaFrom, stage3d)
 ├── js/battle-rules.js      → MathMonBattleRules: pure damage/effectiveness/MP/status functions
 ├── js/question-bank.js     → MATHMON_QUESTION_BANK: optional curated numeric questions ({ question, tier, hint })
 ├── js/question-deck.js     → MathMonQuestionDeck: tiered question generator (config.questionTiers)
@@ -65,8 +79,21 @@ index.html  (entry point)
 ├── js/world/world-data.js  → MathMonWorldData: overworld map data, collision, render3d settings
 ├── js/world-3d/*.js        → ES modules: 3D overworld (overworld3d, terrain, world-assets)
 ├── js/vendor/three/        → Three.js r160 + add-ons (import map in index.html)
-├── js/phaser-game.js        → active Phaser game engine (ElementSelectScene, OverworldScene logic, BattleScene turn loop)
+├── js/phaser-game.js        → active Phaser game engine (scenes below, OverworldScene logic, BattleScene turn loop)
 └── js/bootstrap.js          → starts the game after scripts load
+
+Scene flow: Title → CharacterSelect → NameEntry → HouseInterior (home base; walk in
+through the door) → table → MonsterSelect (partner = element = UI theme) → house →
+door → Overworld (explore) or Battle (quick battle, returns to the house) → Results.
+
+Design system: every screen uses MathMonTheme tokens + UI kit (pixel font
+"Press Start 2P", #1a1625 background, 3px solid borders, near-black panels). CSS
+reads the same tokens from :root (css/game-shell.css); the DOM battle HUD binds
+them in css/battle-hud.css ("Pixel skin"). Call MathMonTheme.apply(element) when a
+scene starts; never hard-code accent colors. Phaser text is baked into textures,
+so BootScene waits for the pixel font before the title starts.
+Top-level `const` modules (MathMonAdaptive, MathMonTheme, …) are not window
+properties: test them with `typeof X !== 'undefined'`, not `window.X`.
 
 The game uses Phaser's Canvas renderer: `setTint` and gradient fills do nothing,
 so VFX use colored shapes. In Phaser 3.60, `onYoyo`/`onRepeat` fire once per
@@ -187,6 +214,11 @@ database/schema.sql
 | Add / change a sound or music track | `js/audio/audio-synth.js` (generated) or a file in `audio/` + `js/audio/audio-manifest.js` |
 | Trigger a sound from gameplay | `SoundManager` in `js/phaser-game.js` (routes to `MathMonAudio`) |
 | Change the title / cover | `js/title-screen.js`, `js/title-3d/title3d.js`, `css/game-shell.css` (`.mm-title`) |
+| Change theme colors / font / components | `js/ui-theme.js` (TOKENS, ELEMENT_FX, ui.*) + matching `:root` tokens in `css/game-shell.css` |
+| Change the house (layout, props, interactions) | `js/phaser-game.js` (`HOUSE`, `MATH_TIPS`, `HouseInteriorScene`) |
+| Change trainer / monster pixel art | `js/pixel-art.js` |
+| Tune adaptive difficulty / enemy AI | `js/adaptive-ml.js` (TARGET, PRIOR, enemyPlan) + `js/battle-config.js` (`adaptive`) — keep FEATURE_NAMES in sync with `python/adaptive_model.py` and `api/src/functions/ml.js` |
+| Change the Azure API | `api/src/functions/*.js`, `api/src/lib/*.js` (routes mirror `python/server.py`) |
 | Change overworld 3D look / props / camera | `js/world-3d/*.js`, `MathMonWorldData.render3d` |
 
 ## Development Checklist

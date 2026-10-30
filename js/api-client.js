@@ -31,8 +31,25 @@
         }
     }
 
+    async function get(path) {
+        try {
+            const response = await fetch(`${API_ROOT}${path}`, { signal: AbortSignal.timeout(3000) });
+            if (!response.ok) return null;
+            return await response.json();
+        } catch (error) {
+            return null;   // offline / no API: the game runs without it
+        }
+    }
+
     window.MathMonApi = {
         getPlayerId,
+        /** Global adaptive-difficulty model trained on all players (Azure Function / Flask). */
+        getModel() {
+            return get('/ml/model');
+        },
+        getLeaderboard() {
+            return get('/leaderboard');
+        },
         registerPlayer(name, gender) {
             return post('/player', {
                 player_id: getPlayerId(),

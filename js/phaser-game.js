@@ -14,6 +14,25 @@
     const BattleHud = MathMonBattleHud;
     const QuestionDeck = MathMonQuestionDeck;
 
+    // Shared design system (js/ui-theme.js) and pixel art (js/pixel-art.js)
+    const Theme = MathMonTheme;
+    const UI = MathMonTheme.ui;
+    const TOKENS = MathMonTheme.TOKENS;
+    const PixelArt = MathMonPixelArt;
+    const TRAINER_PX = 3;   // walk sprites: 16 × 20 cells → 48 × 60 px
+
+    /** Walk-sprite texture key; side frames face left (flip for right). */
+    function trainerTexture(gender, dir, frame) {
+        return `trainer_${gender === 'female' ? 'female' : 'male'}_${dir || 'down'}_${frame || 0}`;
+    }
+
+    /** Adaptive difficulty model (js/adaptive-ml.js), or null when disabled / not loaded. */
+    function adaptiveModel() {
+        // (a top-level `const` in a classic script is not a window property, so test the bare name)
+        const model = typeof MathMonAdaptive !== 'undefined' ? MathMonAdaptive : null;
+        return BATTLE.adaptive && BATTLE.adaptive.enabled ? model : null;
+    }
+
     // `element` drives type effectiveness (Fire > Wind > Earth > Water > Fire).
     const CREATURES = {
         embercub:  { name:'Embercub',  type:'addition',    element:'fire',  color:'#ff6b35', hp:35, atk:9, def:4, sprite:'🐻' },
@@ -108,6 +127,22 @@
         });
     }
 
+    /** BattleScene data for a random wild encounter (overworld grass, house "quick battle"). */
+    function wildBattleData(profile) {
+        const typeKeys = Object.keys(CREATURES);
+        const creatureKey = typeKeys[Math.floor(Math.random() * typeKeys.length)];
+        return {
+            mode: 'wild',
+            creatureKey,
+            creature: CREATURES[creatureKey],
+            difficulty: 1 + Math.floor(profile.stats.level / 3),
+            gender: profile.gender,
+            playerName: profile.playerName,
+            stats: profile.stats,
+            world: profile.world
+        };
+    }
+
     function locationFor(key) {
         return WORLD_LOCATIONS.find((location) => location.key === key) || WORLD_LOCATIONS[0];
     }
@@ -137,7 +172,11 @@
         constructor() { super('BootScene'); }
         create() {
             this.createTextures();
-            this.scene.start('TitleScene');
+            Theme.init(this.game.canvas);
+            const adaptive = adaptiveModel();
+            if (adaptive && BATTLE.adaptive.syncGlobalModel) adaptive.syncFromServer();
+            // Phaser bakes text into textures, so wait for the pixel font before any scene draws.
+            Theme.fontsReady(2500).then(() => this.scene.start('TitleScene'));
         }
         createTextures() {
             const g = this.make.graphics({ x:0, y:0, add:false });
@@ -159,47 +198,21 @@
                 g.clear();
             };
 
-            makeCreature('player_m', 0x42a5f5, (g) => {
-                g.fillStyle(0xffffff, 1); g.fillCircle(16,10,4);
-                g.fillStyle(0x000000, 1); g.fillCircle(14,10,1); g.fillCircle(18,10,1);
-            });
-            makeCreature('player_f', 0xec407a, (g) => {
-                g.fillStyle(0xffffff, 1); g.fillCircle(16,10,4);
-                g.fillStyle(0x000000, 1); g.fillCircle(14,10,1); g.fillCircle(18,10,1);
-                g.fillRect(12,18,8,2);
-            });
-
             makeCreature('npc', 0xffb74d, (g) => {
                 g.fillStyle(0xffffff, 1); g.fillCircle(16,10,4);
                 g.fillStyle(0x000000, 1); g.fillCircle(14,10,1); g.fillCircle(18,10,1);
                 g.fillRect(10,18,12,2);
             });
 
-            const makeTrainer = (key, skin, hair, outfit, accent, isGirl) => {
-                const skinColor = Phaser.Display.Color.HexStringToColor(skin).color;
-                const hairColor = Phaser.Display.Color.HexStringToColor(hair).color;
-                const outfitColor = Phaser.Display.Color.HexStringToColor(outfit).color;
-                const accentColor = Phaser.Display.Color.HexStringToColor(accent).color;
-                g.fillStyle(0x000000, 0.2); g.fillEllipse(24, 45, 24, 5);
-                g.fillStyle(outfitColor, 1); g.fillRoundedRect(12, 25, 24, 17, 5);
-                g.fillStyle(accentColor, 1); g.fillRect(20, 27, 8, 15);
-                g.fillStyle(skinColor, 1); g.fillCircle(24, 18, 10);
-                g.fillStyle(hairColor, 1);
-                if (isGirl) {
-                    g.fillCircle(15, 17, 7); g.fillCircle(33, 17, 7); g.fillTriangle(14, 15, 24, 5, 36, 15);
-                } else {
-                    g.fillTriangle(12, 14, 18, 4, 34, 7); g.fillRect(14, 8, 20, 7);
-                    g.fillStyle(accentColor, 1); g.fillRect(11, 7, 26, 4);
-                }
-                g.fillStyle(0xfafafa, 1); g.fillCircle(21, 18, 2); g.fillCircle(27, 18, 2);
-                g.fillStyle(0x17202a, 1); g.fillCircle(21, 18, 1); g.fillCircle(27, 18, 1);
-                g.lineStyle(2, 0x17202a, 0.8); g.lineBetween(21, 23, 27, 23);
-                g.fillStyle(outfitColor, 1); g.fillRect(5, 28, 8, 14); g.fillRect(35, 28, 8, 14);
-                g.fillStyle(0x263238, 1); g.fillRect(14, 40, 8, 6); g.fillRect(26, 40, 8, 6);
-                g.generateTexture(key, 48, 48); g.clear();
-            };
-            makeTrainer('player_m', '#f2c09b', '#3b2419', '#8d5a3b', '#ef5350', false);
-            makeTrainer('player_f', '#f2c09b', '#5a3028', '#d95786', '#5ee0c0', true);
+            // Trainers: pixel-art walk sprites + card portraits (js/pixel-art.js).
+            // `player_m` / `player_f` (overworld 2D fallback, 2D battle stage) are the
+            // standing front frame at a smaller pixel size. Each key is generated
+            // exactly once: re-using a key would draw onto the old, smaller canvas.
+            PixelArt.makeTrainers(this, TRAINER_PX);
+            PixelArt.makeMonsters(this, 4);                   // monster-select cards
+            PixelArt.makeMonsters(this, 3, 'monster2d_');     // 2D battle stage + 2D title cover (60 px, like the 64 px sprites)
+            PixelArt.paint(this, 'player_m', PixelArt.trainerRows('male', 'down', 0), PixelArt.TRAINER_PALETTES.male, 2);
+            PixelArt.paint(this, 'player_f', PixelArt.trainerRows('female', 'down', 0), PixelArt.TRAINER_PALETTES.female, 2);
 
             const makeMonster = (key, bodyColor, accentColor, drawBody) => {
                 const body = Phaser.Display.Color.HexStringToColor(bodyColor).color;
@@ -392,6 +405,7 @@
 
             const saved = loadProfile();
             const hasSave = Boolean(saved && saved.playerName && saved.stats);
+            Theme.apply(hasSave ? saved.stats.element : null, { instant: true });
             const container = this.game.canvas.parentElement;
             this.titleUi = MathMonTitleScreen.mount({
                 container,
@@ -504,48 +518,76 @@
             this.cameras.main.fadeOut(450, 0, 0, 0);
             this.time.delayedCall(450, () => {
                 if (saved && !saved.stats.element) {
-                    // Saves from before the elemental system pick an element first.
-                    this.scene.start('ElementSelectScene', saved);
+                    // No partner yet (or a save from before the elemental system): back to the house.
+                    this.scene.start('HouseInteriorScene', { ...saved, entrance: true });
                 } else if (saved) {
                     this.scene.start('OverworldScene', saved);
                 } else {
+                    Theme.apply(null);
                     this.scene.start('CharacterSelectScene');
                 }
             });
         }
     }
 
+    /** "CHOOSE YOUR TRAINER": two bordered cards (Boy = blue, Girl = pink). */
     class CharacterSelectScene extends Phaser.Scene {
         constructor() { super('CharacterSelectScene'); }
         create() {
-            this.cameras.main.setBackgroundColor('#1a1424');
+            Theme.apply(null);
+            UI.backdrop(this);
             this.cameras.main.fadeIn(300, 0, 0, 0);
+            this.chosen = false;
 
             const cw = this.cameras.main.width;
             const cy = this.cameras.main.height / 2;
-
-            this.add.text(cw/2, cy - 120, 'CHOOSE YOUR TRAINER', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'16px', color:'#ffd740' }).setOrigin(0.5);
+            UI.title(this, cw / 2, cy - 160, 'Choose your trainer', 18);
 
             const options = [
-                { key:'male', label:'BOY', color:'#42a5f5', x: cw/2 - 120 },
-                { key:'female', label:'GIRL', color:'#ec407a', x: cw/2 + 120 }
+                { key: 'male', label: 'BOY', color: TOKENS.boy },
+                { key: 'female', label: 'GIRL', color: TOKENS.girl }
             ];
-
-            options.forEach(opt => {
-                const y = cy - 20;
-                const box = this.add.rectangle(opt.x, y, 160, 160, 0x000000, 0.7).setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(opt.color).color);
-                const sprite = this.add.image(opt.x, y - 30, opt.key === 'male' ? 'player_m' : 'player_f').setScale(4);
-                const label = this.add.text(opt.x, y + 50, opt.label, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'14px', color:'#ffffff' }).setOrigin(0.5);
-
-                box.setInteractive({ useHandCursor: true });
-                box.on('pointerover', () => { box.setFillStyle(0xffffff, 0.1); SoundManager.playHover(); });
-                box.on('pointerout', () => { box.setFillStyle(0x000000, 0.7); });
-                box.on('pointerdown', () => {
-                    SoundManager.playSelect();
-                    this.cameras.main.fadeOut(200, 0, 0, 0);
-                    this.time.delayedCall(200, () => this.scene.start('NameEntryScene', { gender: opt.key }));
+            this.cards = options.map((opt, i) => {
+                const x = cw / 2 + (i === 0 ? -130 : 130);
+                const card = UI.card(this, x, cy + 10, 184, 232, {
+                    color: opt.color,
+                    onHover: () => this.focus(i),
+                    onSelect: () => this.choose(i)
                 });
+                // Portrait well: the colored circle and the art both sit fully inside the card.
+                const well = this.add.circle(0, -34, 62, Theme.hex(Theme.mix(opt.color, TOKENS.panel, 0.35)), 1);
+                const ring = this.add.circle(0, -34, 62).setStrokeStyle(3, Theme.hex(opt.color), 0.9);
+                const portrait = this.add.image(0, -30, `portrait_${opt.key}`);
+                const label = UI.text(this, 0, 66, opt.label, { size: 12 });
+                const key = UI.text(this, 0, 92, `[${i + 1}]`, { size: 8, color: TOKENS.muted });
+                card.add([well, ring, portrait, label, key]);
+                this.tweens.add({ targets: portrait, y: -34, duration: 900 + i * 150, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+                return { ...opt, card };
             });
+            this.focused = -1;
+            this.focus(0, true);
+
+            UI.text(this, cw / 2, this.cameras.main.height - 60, 'CLICK / TAP A CARD  ·  < > + ENTER', { size: 8, color: TOKENS.muted });
+            this.input.keyboard.on('keydown', (event) => {
+                if (event.key === '1' || event.key === '2') this.choose(Number(event.key) - 1);
+                else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'a' || event.key === 'd') this.focus(this.focused === 0 ? 1 : 0);
+                else if (event.key === 'Enter' || event.key === ' ') this.choose(this.focused);
+            });
+        }
+        focus(i, silent) {
+            if (i === this.focused) return;
+            this.focused = i;
+            if (!silent) SoundManager.playHover();
+            this.cards.forEach((c, k) => c.card.setFocused(k === i));
+        }
+        choose(i) {
+            if (this.chosen || !this.cards[i]) return;
+            this.chosen = true;
+            this.focus(i, true);
+            this.cards[i].card.flash();
+            SoundManager.playSelect();
+            this.cameras.main.fadeOut(320, 0, 0, 0);
+            this.time.delayedCall(320, () => this.scene.start('NameEntryScene', { gender: this.cards[i].key }));
         }
     }
 
@@ -555,125 +597,198 @@
             this.gender = data.gender || 'male';
         }
         create() {
-            this.cameras.main.setBackgroundColor('#1a1424');
+            UI.backdrop(this);
             this.cameras.main.fadeIn(300, 0, 0, 0);
+            this.started = false;
 
             const cw = this.cameras.main.width;
             const cy = this.cameras.main.height / 2;
+            const color = this.gender === 'female' ? TOKENS.girl : TOKENS.boy;
+            const fallback = this.gender === 'female' ? 'Maya' : 'Leo';
 
-            this.add.text(cw/2, cy - 120, 'WHO ARE YOU?', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'24px', color:'#ffd740' }).setOrigin(0.5);
-            this.add.text(cw/2, cy - 70, 'ENTER YOUR NAME', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'10px', color:'#b39ddb' }).setOrigin(0.5);
+            UI.title(this, cw / 2, cy - 170, 'Who are you?', 18);
+            const portraitCard = UI.card(this, cw / 2, cy - 64, 132, 132, { color });
+            portraitCard.zone.removeInteractive();
+            portraitCard.add([
+                this.add.circle(0, -4, 52, Theme.hex(Theme.mix(color, TOKENS.panel, 0.35)), 1),
+                this.add.image(0, 0, `portrait_${this.gender}`).setScale(0.82)
+            ]);
 
-            this.nameText = this.add.text(cw/2, cy - 20, '', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'20px', color:'#ffffff' }).setOrigin(0.5);
+            UI.text(this, cw / 2, cy + 26, 'ENTER YOUR NAME', { size: 8, color: TOKENS.muted });
+            const field = UI.card(this, cw / 2, cy + 70, 360, 56, { color });
+            field.zone.removeInteractive();
+            field.setFocused(true);
+            this.nameText = UI.text(this, cw / 2, cy + 70, '', { size: 16 });
+            this.placeholder = UI.text(this, cw / 2, cy + 70, fallback.toUpperCase(), { size: 16, color: '#5c5470', shadow: false });
+            this.caret = UI.text(this, cw / 2, cy + 72, '_', { size: 16, color: TOKENS.title });
+            this.tweens.add({ targets: this.caret, alpha: 0, duration: 420, yoyo: true, repeat: -1, ease: 'Stepped' });
 
             this.nameInput = '';
+            const render = () => {
+                this.nameText.setText(this.nameInput.toUpperCase());
+                this.placeholder.setVisible(!this.nameInput);
+                this.caret.x = cw / 2 + (this.nameInput ? this.nameText.width / 2 + 10 : this.placeholder.width / 2 + 10);
+            };
+            render();
             this.input.keyboard.on('keydown', (event) => {
-                if (event.repeat) return;
+                if (event.repeat || this.started) return;
                 if (event.key === 'Backspace') {
                     this.nameInput = this.nameInput.slice(0, -1);
-                } else if (event.key.length === 1 && this.nameInput.length < 12) {
+                } else if (event.key === 'Enter') {
+                    this.startGame();
+                    return;
+                } else if (event.key.length === 1 && /[\w .'-]/.test(event.key) && this.nameInput.length < 12) {
                     this.nameInput += event.key;
+                    SoundManager.playClick();
                 }
-                this.nameText.setText(this.nameInput || '_');
+                render();
             });
 
-            const startGame = () => {
-                SoundManager.playSelect();
-                const name = this.nameInput.trim() || (this.gender === 'female' ? 'Maya' : 'Leo');
-                if (window.MathMonMobile) window.MathMonMobile.hide();
-                const stats = createFreshStats();
-                persistProfile(this.gender, name, stats);
-                if (window.MathMonApi) window.MathMonApi.registerPlayer(name, this.gender);
-                this.cameras.main.fadeOut(300, 0, 0, 0);
-                this.time.delayedCall(300, () => this.scene.start('ElementSelectScene', {
-                    gender: this.gender,
-                    playerName: name,
-                    stats: stats
-                }));
-            };
-            this.input.keyboard.once('keydown-ENTER', startGame);
+            this.startButton = UI.button(this, cw / 2, cy + 150, 'Start', { primary: true, color: TOKENS.title, width: 200,
+                onHover: () => SoundManager.playHover(), onClick: () => this.startGame() });
+            UI.text(this, cw / 2, this.cameras.main.height - 40, 'TYPE YOUR NAME  ·  ENTER TO START', { size: 8, color: TOKENS.muted });
 
             if (window.MathMonMobile) window.MathMonMobile.show({
                 placeholder: 'Enter trainer name',
                 submitLabel: 'Start',
                 onSubmit: (value) => {
                     this.nameInput = value.trim().slice(0, 12);
-                    startGame();
+                    this.startGame();
                 }
             });
         }
+        startGame() {
+            if (this.started) return;
+            this.started = true;
+            SoundManager.playSelect();
+            const name = this.nameInput.trim() || (this.gender === 'female' ? 'Maya' : 'Leo');
+            if (window.MathMonMobile) window.MathMonMobile.hide();
+            const stats = createFreshStats();
+            persistProfile(this.gender, name, stats);
+            if (window.MathMonApi) window.MathMonApi.registerPlayer(name, this.gender);
+            this.cameras.main.fadeOut(400, 0, 0, 0);
+            // Home base first: the partner monster is chosen inside the house.
+            this.time.delayedCall(400, () => this.scene.start('HouseInteriorScene', {
+                gender: this.gender,
+                playerName: name,
+                stats: stats,
+                entrance: true,
+                firstVisit: true
+            }));
+        }
     }
 
-    /** Feature 3: pick a starting element (Fire / Water / Wind / Earth). */
-    class ElementSelectScene extends Phaser.Scene {
-        constructor() { super('ElementSelectScene'); }
+    /** "CHOOSE YOUR MONSTER": the partner (and with it the element and UI theme). Opened from the house table. */
+    class MonsterSelectScene extends Phaser.Scene {
+        constructor() { super('MonsterSelectScene'); }
         init(data) {
             this.profile = data;
+            this.chosen = false;
         }
         create() {
-            this.cameras.main.setBackgroundColor('#1a1424');
+            this.backdrop = UI.backdrop(this);
             this.cameras.main.fadeIn(300, 0, 0, 0);
             if (window.MathMonMobile) window.MathMonMobile.hide();
 
             const cw = this.cameras.main.width;
             const ch = this.cameras.main.height;
-            this.add.text(cw / 2, 70, 'CHOOSE YOUR ELEMENT', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'28px', fontStyle:'bold', color:'#ffd740' }).setOrigin(0.5);
-            this.add.text(cw / 2, 108, 'Fire > Wind > Earth > Water > Fire', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'15px', color:'#b39ddb' }).setOrigin(0.5);
+            UI.title(this, cw / 2, 50, 'Choose your monster', 18);
+            UI.text(this, cw / 2, 82, 'WATER > FIRE > WIND > EARTH > WATER', { size: 8, color: TOKENS.muted });
 
             const keys = BATTLE.elementOrder;
-            const cardW = 172;
-            const gap = 16;
+            const cardW = 170, cardH = 336, gap = 18;
             const startX = cw / 2 - ((cardW + gap) * keys.length - gap) / 2 + cardW / 2;
+            const effectNames = { burn: 'BURN', heal: 'HEAL', weaken: 'SLOW', crit: 'CRIT', vulnerable: 'BREAK', shield: 'GUARD', stun: 'STUN' };
             this.cards = keys.map((key, i) => {
                 const el = BATTLE.elements[key];
+                const mon = BATTLE.monsters[el.monster];
                 const weakTo = keys.find((k) => BATTLE.elements[k].beats === key);
-                const color = Phaser.Display.Color.HexStringToColor(el.color).color;
-                const x = startX + i * (cardW + gap);
-                const y = ch / 2 + 20;
-                const card = this.add.container(x, y);
-                const bg = this.add.rectangle(0, 0, cardW, 280, 0x111827, 0.92).setStrokeStyle(3, color);
-                const glow = this.add.ellipse(0, 10, 120, 30, color, 0.35);
-                const signature = BATTLE.monsters[el.monster];
-                const mon = this.add.image(0, -40, signature.sprite2d).setScale(1.8);
-                const name = this.add.text(0, 36, el.name.toUpperCase(), { fontFamily:'"Atkinson Hyperlegible"', fontSize:'22px', fontStyle:'bold', color: el.color }).setOrigin(0.5);
-                const monName = this.add.text(0, 62, `${signature.name}\n${signature.title}`, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'12px', color:'#e2e8f0', align:'center' }).setOrigin(0.5);
-                const strong = this.add.text(0, 94, `Strong vs ${BATTLE.elements[el.beats].name}`, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'13px', color:'#a5f3c0' }).setOrigin(0.5);
-                const weak = this.add.text(0, 114, `Weak vs ${BATTLE.elements[weakTo].name}`, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'13px', color:'#fca5a5' }).setOrigin(0.5);
-                const hint = this.add.text(0, -122, `${i + 1}`, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'14px', fontStyle:'bold', color:'#ffffff', backgroundColor:'#00000088', padding:{ x:6, y:2 } }).setOrigin(0.5);
-                card.add([bg, glow, mon, name, monName, strong, weak, hint]);
-                this.tweens.add({ targets: mon, y: -38, duration: 800 + i * 120, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-                bg.setInteractive({ useHandCursor: true });
-                bg.on('pointerover', () => { if (this.focused !== i) SoundManager.playHover(); this.focusCard(i); });
-                bg.on('pointerdown', () => this.choose(key));
-                return { card, key };
+                const card = UI.card(this, startX + i * (cardW + gap), ch / 2 + 30, cardW, cardH, {
+                    color: el.color,
+                    onHover: () => this.focus(i),
+                    onSelect: () => this.choose(i)
+                });
+                const top = -cardH / 2;
+                const chip = this.add.rectangle(0, top + 22, 92, 20, Theme.hex(el.color), 1);
+                const chipText = UI.text(this, 0, top + 23, el.name.toUpperCase(), { size: 8, color: TOKENS.panel, shadow: false });
+                const well = this.add.circle(0, top + 104, 54, Theme.hex(el.dark), 1).setStrokeStyle(3, Theme.hex(el.color), 0.85);
+                const portrait = this.add.image(0, top + 104, `monster_${key}`);
+                const species = UI.text(this, 0, top + 178, (mon.species || mon.name).toUpperCase(), { size: 12 });
+                const name = UI.text(this, 0, top + 198, mon.name === mon.species ? mon.title.toUpperCase() : mon.name.toUpperCase(), { size: 8, color: el.color });
+                const rule = this.add.rectangle(0, top + 216, cardW - 30, 3, Theme.hex(el.color), 0.5);
+                const specials = [...new Set(BATTLE.actionOrder.map((a) => el.skills[a].effect && effectNames[el.skills[a].effect.type]).filter(Boolean))];
+                const row = (y, labelText, value, color) => [
+                    UI.text(this, -cardW / 2 + 16, y, labelText, { size: 7, color: TOKENS.muted, originX: 0 }),
+                    UI.text(this, cardW / 2 - 16, y, value, { size: 7, color, originX: 1 })
+                ];
+                const stats = [
+                    ...row(top + 236, 'STRONG', BATTLE.elements[el.beats].name.toUpperCase(), TOKENS.good),
+                    ...row(top + 256, 'WEAK', BATTLE.elements[weakTo].name.toUpperCase(), TOKENS.bad),
+                    ...row(top + 276, 'SKILL', specials.join('·'), TOKENS.text)
+                ];
+                const ult = UI.text(this, 0, top + 300, el.skills.ultimate.name.toUpperCase(), { size: 7, color: el.accent, wrap: cardW - 24 });
+                const hotkey = UI.text(this, 0, cardH / 2 + 18, `[${i + 1}]`, { size: 8, color: TOKENS.muted });
+                card.add([chip, chipText, well, portrait, species, name, rule, ...stats, ult, hotkey]);
+                this.tweens.add({ targets: portrait, y: portrait.y - 5, duration: 800 + i * 130, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+                return { key, el, mon, card };
             });
-            this.focused = 0;
-            this.focusCard(0);
+            this.focused = -1;
+            this.focus(Math.max(0, keys.indexOf(this.profile.stats && this.profile.stats.element)), true);
 
-            this.add.text(cw / 2, ch - 50, 'CLICK / TAP A CARD  ·  1-4 or ←/→ + ENTER', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'13px', color:'#80cbc4' }).setOrigin(0.5);
+            UI.text(this, cw / 2, ch - 22, 'CLICK / TAP  ·  1-4 OR < > + ENTER  ·  ESC BACK', { size: 8, color: TOKENS.muted });
             this.input.keyboard.on('keydown', (event) => {
                 const n = Number(event.key);
-                if (n >= 1 && n <= keys.length) this.choose(keys[n - 1]);
-                else if (event.key === 'ArrowRight') this.focusCard((this.focused + 1) % keys.length);
-                else if (event.key === 'ArrowLeft') this.focusCard((this.focused + keys.length - 1) % keys.length);
-                else if (event.key === 'Enter') this.choose(keys[this.focused]);
+                if (n >= 1 && n <= keys.length) this.choose(n - 1);
+                else if (event.key === 'ArrowRight' || event.key === 'd') this.focus((this.focused + 1) % keys.length);
+                else if (event.key === 'ArrowLeft' || event.key === 'a') this.focus((this.focused + keys.length - 1) % keys.length);
+                else if (event.key === 'Enter' || event.key === ' ') this.choose(this.focused);
+                else if (event.key === 'Escape') this.back();
             });
         }
-        focusCard(index) {
-            this.focused = index;
-            this.cards.forEach((c, i) => {
-                this.tweens.add({ targets: c.card, scale: i === index ? 1.07 : 0.95, y: this.cameras.main.height / 2 + (i === index ? 8 : 20), alpha: i === index ? 1 : 0.75, duration: 180, ease: 'Quad.easeOut' });
+        focus(i, silent) {
+            if (i === this.focused) return;
+            this.focused = i;
+            if (!silent) SoundManager.playHover();
+            this.cards.forEach((c, k) => c.card.setFocused(k === i));
+            this.backdrop.setAccent(this.cards[i].el.color);   // preview the element's glow
+        }
+        choose(i) {
+            if (this.chosen || !this.cards[i]) return;
+            this.chosen = true;
+            const picked = this.cards[i];
+            this.focus(i, true);
+            picked.card.flash();
+            SoundManager.playAttackCast(picked.key, 'skill1');   // preview the element's sound
+            const stats = this.profile.stats || createFreshStats();
+            stats.element = picked.key;
+            persistProfile(this.profile.gender, this.profile.playerName, stats, this.profile.world);
+            Theme.apply(picked.key);   // re-theme the whole UI
+
+            // pixel burst in the element's colors
+            const { x, y } = picked.card.container;
+            for (let n = 0; n < 26; n++) {
+                const size = n % 3 ? 6 : 10;
+                const bit = this.add.rectangle(x, y - 60, size, size, Theme.hex(n % 2 ? picked.el.color : picked.el.accent), 1).setDepth(20);
+                const a = (n / 26) * Math.PI * 2;
+                this.tweens.add({ targets: bit, x: x + Math.cos(a) * 150, y: y - 60 + Math.sin(a) * 150, alpha: 0, duration: 700, ease: 'Cubic.easeOut', onComplete: () => bit.destroy() });
+            }
+            this.cards.forEach((c, k) => { if (k !== i) this.tweens.add({ targets: c.card.container, alpha: 0.25, duration: 300 }); });
+            const banner = UI.title(this, this.cameras.main.width / 2, this.cameras.main.height / 2 - 10, `${picked.mon.name} joined you!`, 16).setDepth(30).setScale(0.4).setAlpha(0);
+            this.tweens.add({ targets: banner, scale: 1, alpha: 1, duration: 380, ease: 'Back.easeOut' });
+
+            this.time.delayedCall(1400, () => {
+                this.cameras.main.fadeOut(400, 0, 0, 0);
+                this.time.delayedCall(400, () => this.scene.start('HouseInteriorScene', {
+                    ...this.profile, stats, entrance: false, justChose: picked.key, spawn: HOUSE.tableSpawn
+                }));
             });
         }
-        choose(key) {
+        back() {
             if (this.chosen) return;
             this.chosen = true;
-            SoundManager.playAttackCast(key, 'skill1');   // preview the element's sound
-            const stats = this.profile.stats || createFreshStats();
-            stats.element = key;
-            persistProfile(this.profile.gender, this.profile.playerName, stats, this.profile.world);
-            this.cameras.main.fadeOut(350, 0, 0, 0);
-            this.time.delayedCall(350, () => this.scene.start('OverworldScene', { ...this.profile, stats }));
+            SoundManager.playClick();
+            this.cameras.main.fadeOut(250, 0, 0, 0);
+            this.time.delayedCall(250, () => this.scene.start('HouseInteriorScene', { ...this.profile, entrance: false, spawn: HOUSE.tableSpawn }));
         }
     }
 
@@ -690,6 +805,8 @@
             SoundManager.startMusic();
             SoundManager.bindToggle(this);
             this.cameras.main.fadeIn(300, 0, 0, 0);
+            Theme.apply(this.stats.element || null);
+            const accent = Theme.hex(Theme.accent());
 
             // Map data (deterministic, shared with both renderers): js/world/world-data.js
             this.map = WorldData.get(this.location.key);
@@ -710,10 +827,10 @@
             });
 
             this.cameras.main.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
-            this.player = this.add.image(spawn.x, spawn.y, this.gender === 'female' ? 'player_f' : 'player_m').setScale(2).setDepth(10);
+            this.player = this.add.image(spawn.x, spawn.y, this.gender === 'female' ? 'player_f' : 'player_m').setDepth(10);   // 32 × 40 pixel trainer, native size on 32 px tiles
             this.player.setVisible(!this.world3d);
-            this.playerBaseScale = 2;
-            this.tweens.add({ targets: this.player, scaleY: 2.08, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+            this.playerBaseScale = 1;
+            this.tweens.add({ targets: this.player, scaleY: 1.04, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
             this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
             this.cursors = this.input.keyboard.createCursorKeys();
@@ -725,24 +842,30 @@
             };
 
             this.inEncounter = false;
+            this.locationChanging = false;   // scene instance is reused: reset per visit
             this.wasMoving = false;
             this.grassEncounterChance = 0.012;
             this.lastWorldSave = 0;
             this.greetedAt = {};
 
-            const hudText = { fontFamily:'"Atkinson Hyperlegible"', color:'#ffffff', stroke:'#000000', strokeThickness:3 };
+            // HUD: pixel panels in the shared style (js/ui-theme.js), accent = partner element
             const elementName = BATTLE.elements[getPlayerElement(this.stats)].name;
-            this.add.text(8, 8, `${this.playerName}\nLv.${this.stats.level} · ${elementName}`, { ...hudText, fontSize:'14px' }).setScrollFactor(0).setDepth(20);
-            this.add.text(this.cameras.main.width / 2, 14, `${this.location.name.toUpperCase()}  •  ${this.location.subtitle.toUpperCase()}`, { ...hudText, fontSize:'14px', color:'#ffd740' }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(20);
+            const hud = (node) => node.setScrollFactor(0).setDepth(20);
+            hud(this.add.rectangle(8, 8, 172, 44, accent, 1).setOrigin(0, 0));
+            hud(this.add.rectangle(11, 11, 166, 38, Theme.hex(TOKENS.panel), 0.92).setOrigin(0, 0));
+            hud(UI.text(this, 20, 20, this.playerName.toUpperCase(), { size: 9, originX: 0 }));
+            hud(UI.text(this, 20, 38, `LV.${this.stats.level} · ${elementName.toUpperCase()}`, { size: 7, color: Theme.accent(), originX: 0 }));
+            hud(UI.text(this, this.cameras.main.width / 2, 20, `${this.location.name}  ·  ${this.location.subtitle}`.toUpperCase(), { size: 9, color: TOKENS.title }));
             const help = this.world3d
-                ? 'MOVE: ARROWS / WASD   CAMERA: DRAG / Z X / WHEEL   HOUSE: E   TRAIN: T   GYM: G'
-                : 'MOVE: ARROWS / WASD    ENTER HOUSE: E / H    TRAIN: T    GYM: G';
-            this.add.text(92, this.cameras.main.height - 28, help, { ...hudText, fontSize:'12px' }).setScrollFactor(0).setDepth(20);
+                ? 'MOVE WASD/ARROWS · CAMERA DRAG Z X WHEEL · HOUSE E · TRAIN T · GYM G'
+                : 'MOVE WASD/ARROWS · HOUSE E/H · TRAIN T · GYM G';
+            hud(UI.text(this, 168, this.cameras.main.height - 24, help, { size: 7, originX: 0, stroke: '#000000', strokeThickness: 3 }));
 
             this.touchDirection = { x: 0, y: 0 };
             const touchButton = (label, x, y, direction, action) => {
-                const button = this.add.rectangle(x, y, 52, 44, 0x111827, 0.86).setStrokeStyle(2, 0xffffff).setScrollFactor(0).setDepth(20);
-                this.add.text(x, y, label, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'14px', color:'#ffffff' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+                this.add.rectangle(x, y, 52, 44, accent, 0.95).setScrollFactor(0).setDepth(20);
+                const button = this.add.rectangle(x, y, 46, 38, Theme.hex(TOKENS.panel), 0.9).setScrollFactor(0).setDepth(20);
+                UI.text(this, x, y, label, { size: 10 }).setScrollFactor(0).setDepth(21);
                 button.setInteractive({ useHandCursor: true, draggable: false });
                 button.on('pointerdown', () => {
                     if (action) action();
@@ -766,10 +889,7 @@
             this.input.on('pointerup', () => { this.touchDirection = { x: 0, y: 0 }; });
             if (this.world3d) this.bindCameraControls();
 
-            this.time.delayedCall(1000, () => {
-                const prompt = this.add.text(this.cameras.main.width/2, this.cameras.main.height - 40, 'Press G to challenge Gym', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'14px', color:'#ffd740' }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
-                this.time.delayedCall(4000, () => prompt.destroy());
-            });
+            this.time.delayedCall(1000, () => this.showWorldNotice('PRESS G TO CHALLENGE THE GYM'));
 
             this.keyG = this.input.keyboard.addKey('G');
             this.keyT = this.input.keyboard.addKey('T');
@@ -873,7 +993,7 @@
         let moving = false;
         if (vx !== 0 || vy !== 0) {
             if (!this.wasMoving && !this.world3d) {
-                this.tweens.add({ targets: this.player, scaleX: 2.16, duration: 100, yoyo: true, repeat: 1, ease: 'Quad.easeOut' });
+                this.tweens.add({ targets: this.player, scaleX: 1.08, duration: 100, yoyo: true, repeat: 1, ease: 'Quad.easeOut' });
             }
             this.wasMoving = true;
             const len = Math.sqrt(vx*vx + vy*vy);
@@ -960,13 +1080,20 @@
         }));
     }
 
+    /** Short bordered notice above the bottom HUD (NPC lines, hints). */
     showWorldNotice(message) {
         if (this.worldNotice) this.worldNotice.destroy();
-        this.worldNotice = this.add.text(this.cameras.main.width / 2, this.cameras.main.height - 62, message, {
-            fontFamily:'"Atkinson Hyperlegible"', fontSize:'13px', color:'#ffd740', stroke:'#000000', strokeThickness:3
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(30);
-        this.time.delayedCall(1800, () => {
-            if (this.worldNotice) this.worldNotice.destroy();
+        const cw = this.cameras.main.width;
+        const label = UI.text(this, 0, 0, String(message).toUpperCase(), { size: 8, wrap: cw - 120, lineSpacing: 6 });
+        const w = Math.min(cw - 80, label.width + 28), h = label.height + 18;
+        const notice = this.add.container(cw / 2, this.cameras.main.height - 72, [
+            this.add.rectangle(0, 0, w, h, Theme.hex(Theme.accent()), 1),
+            this.add.rectangle(0, 0, w - 6, h - 6, Theme.hex(TOKENS.panel), 0.95),
+            label
+        ]).setScrollFactor(0).setDepth(30);
+        this.worldNotice = notice;
+        this.time.delayedCall(2200, () => {
+            if (this.worldNotice === notice) { notice.destroy(); this.worldNotice = null; }
         });
     }
 
@@ -1005,24 +1132,9 @@
             if (this.inEncounter) return;
             this.inEncounter = true;
 
-            const typeKeys = Object.keys(CREATURES);
-            const randomType = typeKeys[Phaser.Math.Between(0, typeKeys.length - 1)];
-            const creature = CREATURES[randomType];
-            const difficulty = 1 + Math.floor(this.stats.level / 3);
-
+            const data = wildBattleData({ gender: this.gender, playerName: this.playerName, stats: this.stats, world: this.getWorldState() });
             this.cameras.main.fadeOut(300, 0, 0, 0);
-            this.time.delayedCall(300, () => {
-                this.scene.start('BattleScene', {
-                    mode: 'wild',
-                    creatureKey: randomType,
-                    creature: creature,
-                    difficulty: difficulty,
-                    gender: this.gender,
-                    playerName: this.playerName,
-                    stats: this.stats,
-                    world: this.getWorldState()
-                });
-            });
+            this.time.delayedCall(300, () => this.scene.start('BattleScene', data));
         }
 
         startGymBattle() {
@@ -1076,10 +1188,13 @@
             this.playerName = data.playerName || 'Trainer';
             this.stats = data.stats || { level:1, xp:0, score:0, correctAnswers:0, incorrectAnswers:0, totalAttempts:0, accuracy:100 };
             this.world = data.world || { location: 'sunmeadow', playerX: 368, playerY: 432 };
+            this.returnScene = data.returnScene || 'overworld';   // 'house' after a quick battle from the house door
         }
         create() {
             this.cameras.main.fadeIn(300, 0, 0, 0);
             this.cameras.main.setBackgroundColor('#05070c');
+            Theme.apply(getPlayerElement(this.stats));
+            Theme.ambient.setDensity(0.5);   // lighter particles over the battlefield
             this.tweens.timeScale = 1;
             this.alive = true;
             SoundManager.startMusic('battle');
@@ -1175,13 +1290,15 @@
                 stomp: () => SoundManager.playStomp()
             };
             const container = this.game.canvas.parentElement;
+            const playerArena = BATTLE.arenaFrom === 'player';   // default 'enemy': the opponent's arena, as before
             const want3d = BATTLE.stage3d.enabled && window.MathMonStage3D && window.MathMonStage3D.isSupported();
             if (want3d) {
                 try {
                     const stage = window.MathMonStage3D.create({
                         container, config: BATTLE, hud: this.hud, sound,
                         playerMonster: this.playerMonster, enemyMonster: this.enemyMonster,
-                        playerElement: this.playerElement, enemyElement: this.enemyElement
+                        playerElement: this.playerElement, enemyElement: this.enemyElement,
+                        arena: playerArena ? this.playerMonster.arena : null
                     });
                     this.stageKind = '3d';
                     return stage;
@@ -1196,7 +1313,7 @@
                 config: BATTLE,
                 playerMonster: this.playerMonster, enemyMonster: this.enemyMonster,
                 playerElement: this.playerElement, enemyElement: this.enemyElement,
-                theme: locationFor(this.world.location).theme,
+                theme: playerArena ? Theme.look(this.playerElement).arena : locationFor(this.world.location).theme,
                 trainerKey: this.gender === 'female' ? 'player_f' : 'player_m'
             });
         }
@@ -1207,6 +1324,7 @@
             this.tweens.timeScale = 1;
             this.input.keyboard.off('keydown', this.handleKey, this);
             this.input.keyboard.enableGlobalCapture();
+            Theme.ambient.setDensity(1);
             if (this.offAudioChange) this.offAudioChange();
             SoundManager.setIntensity(0);
             MathMonAudioUI.setButtonVisible(true);
@@ -1279,11 +1397,14 @@
             const tier = BattleRules.getActionTier(action.key);
             this.phase = 'question';
             this.hintUsed = false;
-            this.currentQuestion = QuestionDeck.next({
-                tier,
-                category: this.mode === 'training' ? this.trainingCategory : null,
-                config: BATTLE
-            });
+            const category = this.mode === 'training' ? this.trainingCategory : null;
+            // The adaptive model picks the operation, number range and timer (aiming for ~72% success).
+            const adaptive = adaptiveModel();
+            this.questionPlan = adaptive ? adaptive.plan({
+                tier, category, tierWeights: BATTLE.questionTiers[tier].weights,
+                streak: this.streak, damageTaken: this.damageTakenRatio()
+            }) : null;
+            this.currentQuestion = QuestionDeck.next({ tier, category, config: BATTLE, adapt: this.questionPlan });
             this.questionSeconds = this.currentQuestion.timerSeconds;
             this.hud.setTurn({ side: 'player', label: `Turn ${this.turn} · Answer to attack` });
             this.hud.showQuestion(this.currentQuestion, {
@@ -1297,6 +1418,11 @@
             if (gate.timerEnabled) {
                 this.questionTimer = this.time.addEvent({ delay: 100, loop: true, callback: this.updateQuestionTimer, callbackScope: this });
             }
+        }
+
+        /** 0 (untouched) … 1 (knocked out): fed to the adaptive model. */
+        damageTakenRatio() {
+            return this.playerHp ? 1 - this.playerHp.current / this.playerHp.max : 0;
         }
 
         hintButtonState() {
@@ -1362,6 +1488,9 @@
 
             updateStatsAfterAnswer(this.stats, q.category, correct);
             this.battleStats.questions++;
+            const plan = this.questionPlan;
+            const adaptive = adaptiveModel();
+            if (adaptive && plan) adaptive.record(plan.features, correct, responseTime, q.category);
             if (window.MathMonApi) window.MathMonApi.recordAttempt({
                 category: q.category,
                 correct,
@@ -1369,7 +1498,10 @@
                 difficulty: q.difficulty,
                 answer_given: given === null ? null : Number(given),
                 correct_answer: q.answer,
-                level: this.stats.level
+                level: this.stats.level,
+                // training data for the global adaptive model (python/adaptive_model.py)
+                features: plan ? plan.features : null,
+                predicted: plan ? Math.round(plan.predicted * 1000) / 1000 : null
             });
 
             const hintPenalty = this.hintUsed && BATTLE.hint.penalty === 'damage' ? 1 - BATTLE.hint.damagePenalty : 1;
@@ -1572,6 +1704,19 @@
                     enemyStatus: this.status.enemy,
                     playerStatus: this.status.player
                 });
+                // Adaptive enemy AI: heavy strikes for a player who is cruising, hesitation for one who is struggling.
+                const adaptive = BATTLE.adaptive.enemyAi ? adaptiveModel() : null;
+                const ai = adaptive ? adaptive.enemyPlan({ playerHpRatio: this.playerHp.current / this.playerHp.max,
+                    streak: this.streak, damageTaken: this.damageTakenRatio() }) : null;
+                if (ai) {
+                    result.amount = Math.max(BATTLE.damage.minimum, Math.round(result.amount * ai.multiplier));
+                    if (ai.kind === 'heavy') {
+                        this.hud.showBanner('Heavy strike!', { tone: 'weak', sub: `${this.enemyName} is going all out`, duration: 900 });
+                        this.hud.log(`${this.enemyName} winds up a heavy strike!`, 'warn');
+                    } else if (ai.kind === 'feint') {
+                        this.hud.log(`${this.enemyName} hesitates...`, 'accent');
+                    }
+                }
                 SoundManager.playMonster(this.enemyMonster.key, 'roar', { short: true });
                 Promise.resolve(this.stage.enemyAttack({ onImpact: () => {
                     if (!this.alive) return;
@@ -1671,7 +1816,9 @@
                 xp_earned: xp,
                 score_earned: score,
                 opponent_name: this.enemyName,
-                category: this.trainingCategory || this.creatureData.type || 'addition'
+                category: this.trainingCategory || this.creatureData.type || 'addition',
+                level: this.stats.level,
+                element: this.playerElement
             });
 
             // The 3D canvas and HUD are DOM layers, so fade them alongside Phaser's camera fade.
@@ -1691,7 +1838,8 @@
                     leveledUp: leveledUp,
                     world: this.world,
                     gender: this.gender,
-                    playerName: this.playerName
+                    playerName: this.playerName,
+                    returnScene: this.returnScene
                 });
             });
         }
@@ -1713,9 +1861,13 @@
             this.gender = data.gender || 'male';
             this.playerName = data.playerName || 'Trainer';
             this.stats = data.stats || { level:1, xp:0, score:0, correctAnswers:0, incorrectAnswers:0, totalAttempts:0, accuracy:100 };
+            this.returnScene = data.returnScene || 'overworld';
+            // Phaser reuses scene instances: reset per-visit flags, or Continue stays dead after the first battle.
+            this.leaving = false;
         }
         create() {
-            this.cameras.main.setBackgroundColor('#141020');
+            Theme.apply(this.stats.element || null);
+            UI.backdrop(this);
             // Fanfare / somber jingle, then the calm menu track.
             SoundManager.playJingle(this.won ? 'victory' : 'defeat');
             this.time.delayedCall(this.won ? 3000 : 3800, () => { if (!this.leaving) SoundManager.startMusic('menu'); });
@@ -1723,56 +1875,67 @@
 
             const cw = this.cameras.main.width;
             const ch = this.cameras.main.height;
-            const font = '"Atkinson Hyperlegible"';
             const bs = this.battleStats || { questions: 0, correct: 0, damageDealt: 0, damageTaken: 0, crits: 0, bestCombo: 0, turns: 0 };
-            const accent = this.won ? '#6bff9b' : '#ff6b6b';
+            const outcome = this.won ? TOKENS.good : TOKENS.bad;
+            const accent = Theme.accent();
 
             // Title with a pop-in
-            const title = this.add.text(cw / 2, 62, this.won ? 'VICTORY!' : 'DEFEAT...', { fontFamily: font, fontSize: '46px', fontStyle: 'bold', color: accent,
-                stroke: '#000000', strokeThickness: 6 }).setOrigin(0.5).setScale(0.4).setAlpha(0);
+            const title = UI.text(this, cw / 2, 58, this.won ? 'VICTORY!' : 'DEFEAT...', { size: 32, color: outcome }).setScale(0.4).setAlpha(0);
             this.tweens.add({ targets: title, scale: 1, alpha: 1, duration: 450, ease: 'Back.easeOut' });
-            const sub = this.won ? `${bs.monster || 'Your MathMon'} defeated ${this.creatureName}` : `${this.creatureName} won this time — train and try again!`;
-            this.add.text(cw / 2, 104, sub, { fontFamily: font, fontSize: '15px', color: '#cbd5e1' }).setOrigin(0.5);
+            const sub = this.won ? `${bs.monster || 'Your MathMon'} defeated ${this.creatureName}` : `${this.creatureName} won this time. Train and try again!`;
+            UI.text(this, cw / 2, 100, sub.toUpperCase(), { size: 8, color: TOKENS.muted });
 
-            // Battle stat tiles (count up)
+            // Battle stat cards (count up)
             const accuracy = bs.questions ? Math.round((bs.correct / bs.questions) * 100) : 0;
             const tiles = [
-                { label: 'Correct answers', value: bs.correct, suffix: ` / ${bs.questions}` },
+                { label: 'Correct', value: bs.correct, suffix: ` / ${bs.questions}` },
                 { label: 'Accuracy', value: accuracy, suffix: '%' },
                 { label: 'Damage dealt', value: bs.damageDealt, suffix: '' },
-                { label: 'Best combo', value: bs.bestCombo, prefix: '×' },
+                { label: 'Best combo', value: bs.bestCombo, prefix: 'x' },
                 { label: 'Critical hits', value: bs.crits, suffix: '' },
                 { label: 'Damage taken', value: bs.damageTaken, suffix: '' }
             ];
-            const tileW = 200, tileH = 74, gap = 14;
+            const tileW = 208, tileH = 76, gap = 16;
             const x0 = cw / 2 - (tileW * 3 + gap * 2) / 2 + tileW / 2;
             tiles.forEach((t, i) => {
                 const x = x0 + (i % 3) * (tileW + gap);
-                const y = 170 + Math.floor(i / 3) * (tileH + gap);
-                const box = this.add.graphics();
-                box.fillStyle(0x1e293b, 0.95).fillRoundedRect(x - tileW / 2, y - tileH / 2, tileW, tileH, 12);
-                box.lineStyle(2, Phaser.Display.Color.HexStringToColor(i === 1 ? accent : '#334155').color, 1).strokeRoundedRect(x - tileW / 2, y - tileH / 2, tileW, tileH, 12);
-                this.add.text(x, y - 16, t.label.toUpperCase(), { fontFamily: font, fontSize: '11px', color: '#94a3b8', fontStyle: 'bold' }).setOrigin(0.5);
-                const value = this.add.text(x, y + 10, `${t.prefix || ''}0${t.suffix || ''}`, { fontFamily: font, fontSize: '26px', fontStyle: 'bold', color: '#f8fafc' }).setOrigin(0.5);
+                const y = 168 + Math.floor(i / 3) * (tileH + gap);
+                const tile = UI.card(this, x, y, tileW, tileH, { color: i === 1 ? outcome : accent });
+                tile.zone.removeInteractive();
+                tile.container.setAlpha(0);
+                this.tweens.add({ targets: tile.container, alpha: 1, duration: 250, delay: 150 + i * 70 });
+                const label = UI.text(this, 0, -16, t.label.toUpperCase(), { size: 7, color: TOKENS.muted });
+                const value = UI.text(this, 0, 12, `${t.prefix || ''}0${t.suffix || ''}`, { size: 16 });
+                tile.add([label, value]);
                 this.tweens.addCounter({ from: 0, to: t.value, duration: 700, delay: 250 + i * 90, ease: 'Cubic.easeOut',
                     onUpdate: (tw) => value.setText(`${t.prefix || ''}${Math.round(tw.getValue())}${t.suffix || ''}`) });
             });
 
             // Rewards
-            let y = 340;
+            let y = 330;
             const rewards = [];
-            if (this.mode !== 'training') rewards.push(`+${this.xp} XP`, `+${this.score} score`);
-            rewards.push(`Overall accuracy ${this.stats.accuracy ?? 100}%`, `${bs.turns} turns`);
-            this.add.text(cw / 2, y, rewards.join('   •   '), { fontFamily: font, fontSize: '16px', color: '#ffd740' }).setOrigin(0.5);
+            if (this.mode !== 'training') rewards.push(`+${this.xp} XP`, `+${this.score} SCORE`);
+            rewards.push(`OVERALL ${this.stats.accuracy ?? 100}%`, `${bs.turns} TURNS`);
+            UI.text(this, cw / 2, y, rewards.join('  ·  '), { size: 10, color: TOKENS.title });
             if (this.leveledUp) {
-                y += 30;
-                this.add.text(cw / 2, y, `LEVEL UP! NOW LEVEL ${this.stats.level}`, { fontFamily: font, fontSize: '18px', fontStyle: 'bold', color: '#6bff9b' }).setOrigin(0.5);
+                y += 28;
+                UI.text(this, cw / 2, y, `LEVEL UP! NOW LEVEL ${this.stats.level}`, { size: 12, color: TOKENS.good });
                 this.time.delayedCall(1300, () => SoundManager.playLevelUp());
             }
             if (this.mode === 'gym') {
-                y += 28;
-                this.add.text(cw / 2, y, this.won ? `Gym Badge earned: ${this.leaderName}` : 'Keep training for the gym badge!', { fontFamily: font, fontSize: '16px',
-                    color: this.won ? '#ffd740' : '#ff8a80' }).setOrigin(0.5);
+                y += 26;
+                UI.text(this, cw / 2, y, this.won ? `GYM BADGE EARNED: ${this.leaderName}`.toUpperCase() : 'KEEP TRAINING FOR THE GYM BADGE!',
+                    { size: 9, color: this.won ? TOKENS.title : TOKENS.bad });
+            }
+            // What the adaptive model learned (js/adaptive-ml.js)
+            const adaptive = adaptiveModel();
+            if (adaptive) {
+                const s = adaptive.insight();
+                if (s.samples >= 3) {
+                    y += 30;
+                    UI.text(this, cw / 2, y, `RHYTHM: ${s.level.toUpperCase()}  ·  NEXT QUESTIONS TUNED FOR ~${Math.round(adaptive.TARGET * 100)}% SUCCESS`,
+                        { size: 7, color: accent });
+                }
             }
 
             // Buttons
@@ -1784,31 +1947,20 @@
                 this.cameras.main.fadeOut(ms || 300, 0, 0, 0);
                 this.time.delayedCall(ms || 300, () => this.scene.start(sceneKey, data));
             };
-            const button = (x, label, onClick, primary) => {
-                const w = 220, h = 48;
-                const g = this.add.graphics();
-                const draw = (hover) => {
-                    g.clear();
-                    g.fillStyle(primary ? (hover ? 0xffe57f : 0xffd740) : (hover ? 0x334155 : 0x1e293b), 1).fillRoundedRect(x - w / 2, ch - 92 - h / 2, w, h, 12);
-                    if (!primary) g.lineStyle(2, 0xffd740, 1).strokeRoundedRect(x - w / 2, ch - 92 - h / 2, w, h, 12);
-                };
-                draw(false);
-                this.add.text(x, ch - 92, label, { fontFamily: font, fontSize: '17px', fontStyle: 'bold', color: primary ? '#1a1424' : '#ffd740' }).setOrigin(0.5);
-                const zone = this.add.zone(x, ch - 92, w, h).setInteractive({ useHandCursor: true });
-                zone.on('pointerover', () => { draw(true); SoundManager.playHover(); });
-                zone.on('pointerout', () => draw(false));
-                zone.on('pointerdown', onClick);
-            };
-            const continueToWorld = () => go('OverworldScene', returnData);
+            const button = (x, label, onClick, primary) => UI.button(this, x, ch - 70, label, {
+                primary, width: 230, height: 46, size: 9, onClick, onHover: () => SoundManager.playHover()
+            });
+            const home = this.returnScene === 'house';
+            const continueOn = () => go(home ? 'HouseInteriorScene' : 'OverworldScene', home ? { ...returnData, entrance: true } : returnData);
             if (this.mode === 'training') {
                 const trainAgain = () => go('TrainingScene', { ...returnData, category: this.trainingCategory }, 200);
-                button(cw / 2 - 125, 'CONTINUE  (Enter)', continueToWorld, true);
-                button(cw / 2 + 125, 'TRAIN AGAIN  (T)', trainAgain, false);
+                button(cw / 2 - 125, 'Continue (Enter)', continueOn, true);
+                button(cw / 2 + 125, 'Train again (T)', trainAgain, false);
                 this.input.keyboard.once('keydown-T', trainAgain);
             } else {
-                button(cw / 2, 'CONTINUE  (Enter)', continueToWorld, true);
+                button(cw / 2, home ? 'Back home (Enter)' : 'Continue (Enter)', continueOn, true);
             }
-            this.input.keyboard.once('keydown-ENTER', continueToWorld);
+            this.input.keyboard.once('keydown-ENTER', continueOn);
         }
     }
 
@@ -1843,6 +1995,7 @@
         static playSelect() { MathMonAudio.play('ui.select'); }
         static playClick() { MathMonAudio.play('ui.click'); }
         static playHover() { MathMonAudio.play('ui.hover'); }
+        static playType() { MathMonAudio.play('ui.hover', { cooldown: 0.08, cooldownKey: 'type' }); }   // dialog typewriter
         static playDenied() { MathMonAudio.play('ui.denied'); }
         static playDoor() { MathMonAudio.play('ui.door'); }
         static playTravel() { MathMonAudio.play('ui.travel'); }
@@ -1900,6 +2053,56 @@
         }
     }
 
+    /*
+     * House layout (800 × 600 canvas). Room interior x 80–720, y 80–550; the back
+     * wall ends at y 200. Coordinates are the trainer's FEET; blockers are boxes
+     * the feet cannot enter.
+     */
+    const HOUSE = {
+        walk: { x0: 98, x1: 702, y0: 214, y1: 540 },
+        doorX: 400,
+        tableSpawn: { x: 500, y: 404 },
+        blockers: [
+            { x0: 92, y0: 0, x1: 188, y1: 226 },     // bookshelf
+            { x0: 596, y0: 0, x1: 700, y1: 240 },    // shrine
+            { x0: 94, y0: 258, x1: 204, y1: 400 },   // bed
+            { x0: 210, y0: 230, x1: 242, y1: 258 },  // lamp
+            { x0: 428, y0: 286, x1: 572, y1: 374 },  // table
+            { x0: 664, y0: 484, x1: 704, y1: 540 },  // plant (right)
+            { x0: 96, y0: 484, x1: 136, y1: 540 }    // plant (left)
+        ],
+        // Interactables: `x, y` = where the prompt floats, `r` = reach from the feet.
+        spots: [
+            { key: 'shelf',  label: 'BOOKSHELF', x: 140, y: 84,  fx: 140, fy: 236, r: 64 },
+            { key: 'window', label: 'WINDOW',    x: 344, y: 92,  fx: 344, fy: 222, r: 60 },
+            { key: 'shrine', label: 'EGG SHRINE', x: 648, y: 84, fx: 648, fy: 254, r: 64 },
+            { key: 'bed',    label: 'BED',       x: 150, y: 250, fx: 226, fy: 330, r: 58 },
+            { key: 'table',  label: 'PARTNER TABLE', x: 500, y: 272, fx: 500, fy: 330, r: 100 },
+            { key: 'door',   label: 'DOOR',      x: 400, y: 500, fx: 400, fy: 530, r: 56 }
+        ]
+    };
+
+    const MATH_TIPS = [
+        'ADDING 9? Add 10, then take 1 away. 46 + 9 = 56 - 1 = 55.',
+        'SUBTRACTING: count UP from the small number. 52 - 47: 47 to 50 is 3, 50 to 52 is 2. Answer 5!',
+        'TIMES 5: times 10, then halve it. 14 x 5 = 140 / 2 = 70.',
+        'DIVISION is multiplication backwards. 56 / 7 = ? Think: 7 x ? = 56. It is 8!',
+        'TIMES 9 trick: the digits of 9 x 7 = 63 add up to 9 (6 + 3).',
+        'DOUBLES help: 7 + 8 is 7 + 7 + 1 = 15.',
+        'BIG SUMS: add the tens first, then the ones. 38 + 45 = 70 + 13 = 83.',
+        'ANSWER FAST for a CRITICAL hit, and chain correct answers for COMBO damage!'
+    ];
+
+    /**
+     * The player's house: the home base. Entered after naming the trainer, from
+     * the overworld door, or after a quick battle. Walk with WASD / arrows / D-pad
+     * (or click an object to walk to it); E / Space / Enter / A interacts.
+     *   Table  → choose a partner monster (MonsterSelectScene)
+     *   Door   → explore town (OverworldScene) or a quick battle (BattleScene)
+     *   Shelf  → math tips · Shrine → what the adaptive model learned · Bed → rest & save
+     *   Window → the partner element's home map
+     * Accents (blanket, rug trim, banner, shrine glow, egg spots) follow the element theme.
+     */
     class HouseInteriorScene extends Phaser.Scene {
         constructor() { super('HouseInteriorScene'); }
 
@@ -1907,64 +2110,511 @@
             this.gender = data.gender || 'male';
             this.playerName = data.playerName || 'Trainer';
             this.stats = data.stats || createFreshStats();
-            this.world = data.world || { location: 'sunmeadow', playerX: 368, playerY: 432 };
+            this.world = data.world || null;
+            this.entrance = data.entrance !== false;     // step in through the front door
+            this.firstVisit = Boolean(data.firstVisit);
+            this.justChose = data.justChose || null;     // element picked a moment ago → theme reveal
+            this.spawn = data.spawn || null;
         }
 
         create() {
-            SoundManager.startMusic();
+            SoundManager.startMusic('menu');
             SoundManager.bindToggle(this);
-            this.cameras.main.setBackgroundColor('#241b2f');
-            this.cameras.main.fadeIn(300, 0, 0, 0);
+            if (window.MathMonMobile) window.MathMonMobile.hide();
+            Theme.apply(this.stats.element || null);
+            UI.backdrop(this);
 
-            const width = this.cameras.main.width;
-            const height = this.cameras.main.height;
-            const roomLeft = 72;
-            const roomTop = 70;
-            const roomWidth = width - 144;
-            const roomHeight = height - 150;
+            this.locked = true;
+            this.dialog = null;
+            this.dialogClosedAt = 0;
+            this.facing = 'up';
+            this.flip = false;
+            this.walkTime = 0;
+            this.walkTarget = null;
 
-            this.add.rectangle(width / 2, height / 2, roomWidth, roomHeight, 0xc58f67).setStrokeStyle(8, 0x5d4037);
-            this.add.rectangle(width / 2, roomTop + 22, roomWidth - 16, 44, 0x795548).setStrokeStyle(4, 0x3e2723);
-            for (let x = roomLeft + 12; x < roomLeft + roomWidth - 12; x += 42) {
-                this.add.rectangle(x, roomTop + 84, 34, roomHeight - 104, 0xd9a06f, 0.65);
+            this.drawRoom();
+            this.createAccents();
+            this.createPlayer();
+            this.createHud();
+            this.bindInput();
+
+            const accent = Theme.accent();
+            if (this.justChose) {
+                // Theme reveal: the room starts neutral and warms up to the new element.
+                this.paintAccents(TOKENS.title);
+                this.cameras.main.fadeIn(400, 0, 0, 0);
+                this.time.delayedCall(350, () => this.tweenAccents(TOKENS.title, accent, 1200));
+                this.time.delayedCall(900, () => {
+                    this.locked = false;   // free to walk once the reveal dialog is closed
+                    const mon = monsterFor(this.justChose);
+                    const look = Theme.look(this.justChose);
+                    this.say('PARTNER', [
+                        `${mon.name.toUpperCase()} THE ${(mon.species || mon.title).toUpperCase()} joined your team!`,
+                        `Your home now glows with ${BATTLE.elements[this.justChose].name.toUpperCase()}, the power of the ${look.mapName.toUpperCase()}.`,
+                        'Head to the DOOR when you are ready to battle.'
+                    ]);
+                });
+            } else {
+                this.paintAccents(accent);
+                if (this.entrance) this.playEntrance();
+                else {
+                    this.cameras.main.fadeIn(300, 0, 0, 0);
+                    this.locked = false;
+                }
             }
-
-            this.add.text(width / 2, 34, 'YOUR HOUSE', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'28px', color:'#ffd740' }).setOrigin(0.5);
-            this.add.text(width / 2, 58, 'A quiet place to rest between adventures', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'13px', color:'#d7ccc8' }).setOrigin(0.5);
-
-            const furniture = (x, y, w, h, color, label) => {
-                this.add.rectangle(x, y, w, h, color).setStrokeStyle(3, 0x3e2723);
-                if (label) this.add.text(x, y, label, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'12px', color:'#ffffff' }).setOrigin(0.5);
-            };
-            furniture(170, 205, 150, 76, 0x8d4e3b, 'BED');
-            furniture(600, 205, 120, 54, 0x4e6b75, 'DESK');
-            furniture(600, 345, 110, 100, 0x6d4c41, 'SHELF');
-            furniture(300, 390, 240, 54, 0xb85c38, 'RUG');
-            this.add.rectangle(600, 182, 72, 34, 0x90caf9).setStrokeStyle(3, 0xffffff);
-            this.add.image(350, 315, 'leafloo').setScale(1.2).setDepth(4);
-            this.tweens.add({ targets: this.children.list[this.children.list.length - 1], y: 307, duration: 720, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-
-            this.player = this.add.image(width / 2, height - 120, this.gender === 'female' ? 'player_f' : 'player_m').setScale(2.4).setDepth(5);
-            this.add.text(width / 2, height - 78, `${this.playerName}'s room`, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'13px', color:'#ffffff' }).setOrigin(0.5);
-
-            const exit = this.add.rectangle(width / 2, height - 32, 180, 30, 0x263238).setStrokeStyle(2, 0xffd740).setInteractive({ useHandCursor: true });
-            this.add.text(width / 2, height - 32, 'EXIT HOUSE  [E]', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'14px', color:'#ffd740' }).setOrigin(0.5);
-            exit.on('pointerdown', () => this.exitHouse());
-            this.input.keyboard.on('keydown-E', () => this.exitHouse());
-            this.input.keyboard.on('keydown-ESC', () => this.exitHouse());
         }
 
-        exitHouse() {
-            if (this.exiting) return;
-            this.exiting = true;
+        // ---- Drawing --------------------------------------------------------------------
+        drawRoom() {
+            const key = 'house_room';
+            if (!this.textures.exists(key)) {
+                const tex = this.textures.createCanvas(key, 800, 600);
+                const ctx = tex.getContext();
+                const r = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+                const hash = (n) => { const s = Math.sin(n * 91.345) * 47453.21; return s - Math.floor(s); };
+
+                // outer walls
+                r(64, 64, 672, 504, '#0f0b18');
+                r(68, 68, 664, 496, '#241b33');
+                // back wall: striped wallpaper, wainscot, baseboard
+                r(80, 80, 640, 120, '#2d2342');
+                for (let x = 84; x < 720; x += 24) r(x, 80, 4, 96, '#342950');
+                r(80, 176, 640, 20, '#3c2f57');
+                r(80, 176, 640, 4, '#4a3b6b');
+                r(80, 196, 640, 4, '#1d1629');
+                // floor planks
+                for (let y = 200, row = 0; y < 550; y += 20, row++) {
+                    r(80, y, 640, 20, row % 2 ? '#56412f' : '#4f3b2e');
+                    r(80, y + 18, 640, 2, '#3a2a20');
+                    for (let x = 80 + (row % 2) * 40; x < 720; x += 80) r(x, y, 2, 18, '#3a2a20');
+                    for (let x = 96; x < 720; x += 52) if (hash(x + row * 7) > 0.7) r(x, y + 6, 4, 2, '#624a37');
+                }
+                r(80, 200, 640, 8, 'rgba(10,6,16,0.45)');           // wall shadow on the floor
+                // bottom wall with the door gap
+                r(68, 550, 304, 14, '#241b33');
+                r(428, 550, 304, 14, '#241b33');
+                r(64, 548, 308, 4, '#3a2d4f');
+                r(428, 548, 308, 4, '#3a2d4f');
+
+                // bookshelf
+                r(92, 92, 96, 124, '#3e2723');
+                r(96, 96, 88, 116, '#5d4037');
+                const bookColors = ['#e53935', '#42a5f5', '#66bb6a', '#ffd740', '#ab47bc', '#ff7043', '#26c6da', '#f5f5f5'];
+                [100, 130, 160, 190].forEach((shelfY, s) => {
+                    r(100, shelfY - 2, 80, 26, '#2a1a15');
+                    let x = 102;
+                    let n = s * 11;
+                    while (x < 176) {
+                        const bw = 6 + Math.floor(hash(n) * 5);
+                        const bh = 16 + Math.floor(hash(n + 3) * 7);
+                        if (x + bw > 178) break;
+                        r(x, shelfY + 22 - bh, bw, bh, bookColors[Math.floor(hash(n + 5) * bookColors.length)]);
+                        r(x, shelfY + 22 - bh, bw, 2, 'rgba(255,255,255,0.25)');
+                        x += bw + 1;
+                        n++;
+                    }
+                    r(98, shelfY + 22, 84, 4, '#3e2723');
+                });
+
+                // window (night sky)
+                r(296, 96, 96, 76, '#3e2c22');
+                r(302, 102, 84, 64, '#1b2b55');
+                r(302, 134, 84, 32, '#22396b');
+                r(360, 108, 12, 12, '#fff3b0');
+                r(364, 108, 8, 8, '#1b2b55');
+                [[312, 112], [334, 120], [318, 140], [376, 146], [346, 108]].forEach(([x, y]) => r(x, y, 2, 2, '#fff8dc'));
+                r(342, 102, 4, 64, '#3e2c22');
+                r(302, 132, 84, 4, '#3e2c22');
+                r(290, 172, 108, 8, '#6d4c41');
+
+                // shrine pedestal
+                r(604, 150, 88, 84, '#2a2240');
+                r(608, 154, 80, 76, '#4a4060');
+                r(608, 154, 80, 8, '#5c5078');
+                r(616, 226, 64, 12, '#3a3150');
+                r(620, 170, 56, 4, '#2a2240');
+                r(618, 196, 6, 18, '#efe6d0'); r(619, 192, 4, 4, '#ffd54f');   // candles
+                r(672, 196, 6, 18, '#efe6d0'); r(673, 192, 4, 4, '#ffd54f');
+
+                // bed frame, mattress, pillow (the blanket is a themed shape)
+                r(96, 262, 104, 132, '#3e2723');
+                r(100, 266, 96, 124, '#6d4c41');
+                r(100, 266, 96, 20, '#5d4037');
+                r(106, 286, 84, 100, '#e8e0f0');
+                r(116, 292, 64, 18, '#ffffff');
+                r(116, 306, 64, 4, '#d6cde6');
+
+                // lamp (the glow is a separate flickering shape)
+                r(224, 216, 4, 34, '#9e9e9e');
+                r(214, 250, 24, 6, '#5d4037');
+                r(210, 204, 32, 14, '#ffcc80');
+                r(214, 200, 24, 4, '#ffe0b2');
+
+                // table
+                r(428, 290, 144, 70, '#3e2723');
+                r(432, 294, 136, 60, '#8d6e63');
+                r(432, 294, 136, 6, '#a1887f');
+                r(440, 354, 10, 18, '#4e342e');
+                r(550, 354, 10, 18, '#4e342e');
+
+                // plants
+                const plant = (x, y) => {
+                    r(x + 6, y + 30, 28, 22, '#8d5a3b'); r(x + 6, y + 30, 28, 4, '#a86f4a');
+                    r(x + 14, y + 4, 12, 28, '#2e7d32'); r(x + 2, y + 14, 16, 12, '#43a047'); r(x + 22, y + 10, 16, 12, '#43a047');
+                    r(x + 16, y, 8, 8, '#66bb6a');
+                };
+                plant(96, 480);
+                plant(664, 480);
+                tex.refresh();
+            }
+            this.add.image(400, 300, key).setDepth(0);
+
+            // window moonlight + lamp glow (soft lighting, animated)
+            this.windowLight = this.add.polygon(0, 0, [302, 172, 386, 172, 430, 300, 270, 300], 0x9fc3ff, 0.07).setOrigin(0, 0).setDepth(1);
+            this.tweens.add({ targets: this.windowLight, fillAlpha: 0.12, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+            this.lampGlow = this.add.circle(226, 214, 54, 0xffc46b, 0.12).setDepth(1).setBlendMode(Phaser.BlendModes.ADD);
+            this.lampCore = this.add.circle(226, 212, 22, 0xffe0a0, 0.18).setDepth(1).setBlendMode(Phaser.BlendModes.ADD);
+            this.time.addEvent({ delay: 90, loop: true, callback: () => {
+                const flicker = Math.random() < 0.08 ? 0.04 : 0.11 + Math.random() * 0.04;
+                this.lampGlow.setFillStyle(0xffc46b, flicker);
+                this.lampCore.setFillStyle(0xffe0a0, flicker + 0.06);
+            } });
+
+            // front door (opens for entrances / exits)
+            this.door = this.add.container(HOUSE.doorX, 556).setDepth(2);
+            this.doorClosed = this.add.container(0, 0, [
+                this.add.rectangle(0, 0, 56, 16, 0x3e2723),
+                this.add.rectangle(0, 0, 50, 10, 0x6d4c41),
+                this.add.rectangle(16, 0, 4, 4, 0xffd54f)
+            ]);
+            this.doorOpen = this.add.container(0, 0, [
+                this.add.rectangle(0, 0, 56, 16, 0x0b0812),
+                this.add.rectangle(0, -14, 56, 28, 0xffe9a8, 0.18).setBlendMode(Phaser.BlendModes.ADD)
+            ]).setVisible(false);
+            this.door.add([this.doorOpen, this.doorClosed]);
+            this.add.rectangle(HOUSE.doorX, 534, 64, 14, 0x7a3b3b).setDepth(1);   // door mat
+        }
+
+        /** Themed props: blanket, rug, wall trim, banner, shrine glow, egg, partner cards on the table. */
+        createAccents() {
+            this.blanket = this.add.rectangle(148, 350, 84, 76, 0xffffff).setDepth(1);
+            this.blanketFold = this.add.rectangle(148, 314, 84, 6, 0xffffff).setDepth(1);
+            this.rugTrim = this.add.rectangle(400, 456, 252, 84, 0xffffff).setDepth(1);
+            this.add.rectangle(400, 456, 236, 68, 0x2b2147).setDepth(1);
+            this.rugStripe = this.add.rectangle(400, 456, 200, 6, 0xffffff, 0.6).setDepth(1);
+            this.wallTrim = this.add.rectangle(400, 178, 640, 4, 0xffffff, 0.8).setDepth(1);
+            this.bannerPole = this.add.rectangle(492, 98, 52, 4, 0x8d6e63).setDepth(1);
+            this.banner = this.add.triangle(492, 100, 0, 0, 44, 0, 22, 56, 0xffffff).setOrigin(0.5, 0).setDepth(1);
+            this.bannerMark = this.add.rectangle(492, 118, 10, 10, 0xffffff, 0.9).setDepth(1);
+            this.shrineGlow = this.add.circle(648, 130, 46, 0xffffff, 0.14).setDepth(2).setBlendMode(Phaser.BlendModes.ADD);
+            this.tweens.add({ targets: this.shrineGlow, scale: 1.18, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+            this.egg = this.add.image(648, 124, PixelArt.makeEgg(this, Theme.accent(), 4)).setDepth(3);
+            this.tweens.add({ targets: this.egg, y: 118, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+            this.time.addEvent({ delay: 3200, loop: true, callback: () => {   // the egg wobbles now and then
+                this.tweens.add({ targets: this.egg, angle: { from: -4, to: 4 }, duration: 90, yoyo: true, repeat: 3, onComplete: () => this.egg.setAngle(0) });
+            } });
+
+            // one small card per element on the table; the partner's card stands up
+            this.tableCards = BATTLE.elementOrder.map((key, i) => {
+                const x = 452 + i * 32, color = Theme.hex(BATTLE.elements[key].color);
+                const c = this.add.container(x, 322).setDepth(2);
+                c.add([this.add.rectangle(0, 0, 24, 32, color), this.add.rectangle(0, 0, 18, 26, 0x0d0a14), this.add.rectangle(0, 0, 8, 8, color)]);
+                if (key === this.stats.element) {
+                    c.y = 312;
+                    this.tweens.add({ targets: c, y: 308, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+                }
+                return c;
+            });
+        }
+
+        paintAccents(color) {
+            const c = Theme.hex(color);
+            const dark = Theme.hex(Theme.mix(color, '#0d0a14', 0.45));
+            this.blanket.setFillStyle(dark, 1);
+            this.blanketFold.setFillStyle(c, 1);
+            this.rugTrim.setFillStyle(c, 1);
+            this.rugStripe.setFillStyle(c, 0.6);
+            this.wallTrim.setFillStyle(c, 0.8);
+            this.banner.setFillStyle(c, 1);
+            this.bannerMark.setFillStyle(Theme.hex(Theme.mix(color, '#ffffff', 0.6)), 0.9);
+            this.shrineGlow.setFillStyle(c, 0.16);
+        }
+
+        tweenAccents(from, to, ms) {
+            this.tweens.addCounter({ from: 0, to: 1, duration: ms, ease: 'Sine.easeInOut',
+                onUpdate: (tw) => this.paintAccents(Theme.mix(from, to, tw.getValue())),
+                onComplete: () => this.egg.setTexture(PixelArt.makeEgg(this, to, 4)) });
+        }
+
+        createPlayer() {
+            const start = this.spawn || (this.entrance ? { x: HOUSE.doorX, y: 600 } : { x: HOUSE.doorX, y: 500 });
+            this.shadow = this.add.ellipse(start.x, start.y - 2, 30, 8, 0x000000, 0.35).setDepth(start.y - 1);
+            this.player = this.add.image(start.x, start.y, trainerTexture(this.gender, this.entrance ? 'up' : 'down', 0)).setOrigin(0.5, 1);
+            this.facing = this.entrance ? 'up' : 'down';
+            this.syncPlayer();
+        }
+
+        createHud() {
+            const cw = this.cameras.main.width;
+            const element = this.stats.element;
+            const mon = element ? monsterFor(element) : null;
+            UI.title(this, cw / 2, 36, `${this.playerName}'s house`, 12).setDepth(950);
+            UI.text(this, cw / 2, 58, mon ? `PARTNER: ${mon.name.toUpperCase()}  ·  ${BATTLE.elements[element].name.toUpperCase()}` : 'NO PARTNER YET  ·  VISIT THE TABLE',
+                { size: 7, color: mon ? Theme.accent() : TOKENS.muted }).setDepth(950);
+            const touch = window.MathMonMobile && window.MathMonMobile.isTouchDevice();
+            UI.text(this, 16, 595, touch ? 'D-PAD MOVE  ·  A ACT' : 'WASD / ARROWS MOVE  ·  E ACT  ·  CLICK OBJECTS', { size: 7, color: TOKENS.muted, originX: 0, originY: 1 }).setDepth(950);
+
+            // floating "press E" prompt over the nearest interactable
+            this.prompt = this.add.container(0, 0).setDepth(960).setVisible(false);
+            this.promptBg = this.add.rectangle(0, 0, 10, 22, Theme.hex(TOKENS.panel), 0.95).setStrokeStyle(3, Theme.hex(Theme.accent()));
+            this.promptText = UI.text(this, 0, 1, '', { size: 7 });
+            this.prompt.add([this.promptBg, this.promptText]);
+            this.tweens.add({ targets: this.prompt, scale: 1.06, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+            if (touch) this.pad = UI.dpad(this, { onAction: () => this.tryInteract() });
+        }
+
+        bindInput() {
+            this.cursors = this.input.keyboard.createCursorKeys();
+            this.wasd = this.input.keyboard.addKeys({ up: 'W', down: 'S', left: 'A', right: 'D' });
+            const act = () => this.tryInteract();
+            ['keydown-E', 'keydown-SPACE', 'keydown-ENTER'].forEach((evt) => this.input.keyboard.on(evt, act));
+            // click / tap an object: walk to it, then interact
+            HOUSE.spots.forEach((spot) => {
+                const zone = this.add.zone(spot.x, (spot.y + spot.fy) / 2, 110, Math.max(70, spot.fy - spot.y + 30)).setInteractive({ useHandCursor: true });
+                zone.on('pointerdown', () => {
+                    if (this.locked || this.isDialogOpen()) return;
+                    this.walkTarget = { spot, stuck: 0 };
+                });
+            });
+        }
+
+        // ---- Entrance / movement -------------------------------------------------------------
+        playEntrance() {
+            this.cameras.main.fadeIn(500, 0, 0, 0);
+            this.time.delayedCall(250, () => this.setDoor(true));
+            this.time.delayedCall(450, () => {
+                this.facing = 'up';
+                this.tweens.add({ targets: this.player, y: 500, duration: 900, ease: 'Sine.easeOut',
+                    onUpdate: () => { this.walkTime += 1 / 60; this.syncPlayer(true); },
+                    onComplete: () => {
+                        this.setDoor(false);
+                        this.facing = 'down';
+                        this.syncPlayer(false);
+                        this.locked = false;
+                        if (this.firstVisit) {
+                            this.say('HOME', [
+                                `Welcome home, ${this.playerName.toUpperCase()}! This house is your base between adventures.`,
+                                'Walk to the PARTNER TABLE and choose the monster that will battle beside you.',
+                                'Tip: the BOOKSHELF has math tricks, and the EGG SHRINE shows how your skills are growing.'
+                            ]);
+                        }
+                    } });
+            });
+        }
+
+        setDoor(open) {
+            this.doorOpen.setVisible(open);
+            this.doorClosed.setVisible(!open);
             SoundManager.playDoor();
-            this.cameras.main.fadeOut(250, 0, 0, 0);
-            this.time.delayedCall(250, () => this.scene.start('OverworldScene', {
-                gender: this.gender,
-                playerName: this.playerName,
-                stats: this.stats,
-                world: this.world
-            }));
+        }
+
+        isDialogOpen() {
+            return Boolean(this.dialog && this.dialog.isOpen());
+        }
+
+        readDirection() {
+            let x = 0, y = 0;
+            if (this.cursors.left.isDown || this.wasd.left.isDown) x = -1;
+            else if (this.cursors.right.isDown || this.wasd.right.isDown) x = 1;
+            if (this.cursors.up.isDown || this.wasd.up.isDown) y = -1;
+            else if (this.cursors.down.isDown || this.wasd.down.isDown) y = 1;
+            if (!x && !y && this.pad) ({ x, y } = this.pad.direction);
+            if (x || y) this.walkTarget = null;
+            return { x, y };
+        }
+
+        update(time, delta) {
+            if (this.locked || this.isDialogOpen()) {
+                this.prompt.setVisible(false);
+                return;
+            }
+            const dt = Math.min(0.05, delta / 1000);
+            let { x: vx, y: vy } = this.readDirection();
+            if (!vx && !vy && this.walkTarget) {
+                const s = this.walkTarget.spot;
+                const dx = s.fx - this.player.x, dy = s.fy - this.player.y;
+                const d = Math.hypot(dx, dy);
+                if (d < s.r * 0.7) {
+                    this.walkTarget = null;
+                    this.interact(s);
+                    return;
+                }
+                vx = dx / d; vy = dy / d;
+            }
+            let moving = false;
+            if (vx || vy) {
+                const len = Math.hypot(vx, vy);
+                vx /= len; vy /= len;
+                const before = { x: this.player.x, y: this.player.y };
+                this.moveWithCollision(vx * 150 * dt, vy * 150 * dt);
+                moving = before.x !== this.player.x || before.y !== this.player.y;
+                if (Math.abs(vx) > Math.abs(vy)) { this.facing = 'side'; this.flip = vx > 0; }
+                else this.facing = vy < 0 ? 'up' : 'down';
+                if (this.walkTarget) {
+                    this.walkTarget.stuck = moving ? 0 : this.walkTarget.stuck + dt;
+                    if (this.walkTarget.stuck > 0.35) {   // blocked by furniture: interact if close enough
+                        const s = this.walkTarget.spot;
+                        this.walkTarget = null;
+                        if (Phaser.Math.Distance.Between(this.player.x, this.player.y, s.fx, s.fy) < s.r * 1.6) this.interact(s);
+                    }
+                }
+            }
+            if (moving) this.walkTime += dt;
+            this.syncPlayer(moving);
+            this.updatePrompt();
+        }
+
+        blocked(x, y) {
+            const w = HOUSE.walk;
+            if (x < w.x0 || x > w.x1 || y < w.y0 || y > w.y1) return true;
+            return HOUSE.blockers.some((b) => x + 11 > b.x0 && x - 11 < b.x1 && y > b.y0 && y - 8 < b.y1);
+        }
+
+        moveWithCollision(dx, dy) {
+            if (!this.blocked(this.player.x + dx, this.player.y)) this.player.x += dx;
+            if (!this.blocked(this.player.x, this.player.y + dy)) this.player.y += dy;
+        }
+
+        syncPlayer(moving) {
+            const frame = moving ? [1, 0, 2, 0][Math.floor(this.walkTime * 8) % 4] : 0;
+            this.player.setTexture(trainerTexture(this.gender, this.facing, frame));
+            this.player.setFlipX(this.facing === 'side' && this.flip);
+            this.player.setDepth(this.player.y);
+            this.shadow.setPosition(this.player.x, this.player.y - 2).setDepth(this.player.y - 1);
+        }
+
+        nearestSpot() {
+            let best = null, bestD = Infinity;
+            HOUSE.spots.forEach((s) => {
+                const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, s.fx, s.fy);
+                if (d < s.r && d < bestD) { best = s; bestD = d; }
+            });
+            return best;
+        }
+
+        updatePrompt() {
+            const spot = this.nearestSpot();
+            if (!spot) { this.prompt.setVisible(false); return; }
+            const touch = Boolean(this.pad);
+            this.promptText.setText(`${touch ? 'A' : 'E'} · ${spot.label}`);
+            this.promptBg.setSize(this.promptText.width + 18, 22);
+            this.promptBg.setStrokeStyle(3, Theme.hex(Theme.accent()));
+            this.prompt.setPosition(Phaser.Math.Clamp(spot.x, 90, 710), spot.y).setVisible(true);
+        }
+
+        // ---- Interactions ---------------------------------------------------------------------
+        tryInteract() {
+            if (this.locked || this.isDialogOpen() || this.time.now - this.dialogClosedAt < 200) return;
+            const spot = this.nearestSpot();
+            if (spot) this.interact(spot);
+        }
+
+        say(speaker, pages, choices, onChoose) {
+            if (this.dialog && this.dialog.isOpen()) this.dialog.close();
+            this.walkTarget = null;
+            this.dialog = UI.dialog(this, {
+                speaker, pages, choices, onChoose,
+                sound: { type: () => SoundManager.playType(), select: () => SoundManager.playSelect() },
+                onClose: () => { this.dialogClosedAt = this.time.now; }
+            });
+        }
+
+        interact(spot) {
+            SoundManager.playClick();
+            const element = this.stats.element;
+            const mon = element ? monsterFor(element) : null;
+            if (spot.key === 'shelf') {
+                const tips = Phaser.Utils.Array.Shuffle(MATH_TIPS.slice()).slice(0, 3);
+                this.say('MATH TIPS', tips);
+            } else if (spot.key === 'window') {
+                this.say('WINDOW', element
+                    ? [`Far away you can see the ${Theme.look(element).mapName.toUpperCase()}, home of ${mon.name.toUpperCase()}. Every rival fights on its own home ground.`]
+                    : ['A quiet night outside. Choose a partner and the world will answer.']);
+            } else if (spot.key === 'bed') {
+                saveSceneProgress(this);
+                SoundManager.playHeal();
+                this.cameras.main.fade(250, 0, 0, 0, false, (cam, t) => { if (t === 1) this.cameras.main.fadeIn(350, 0, 0, 0); });
+                this.time.delayedCall(450, () => this.say('BED', ['You take a short rest. Progress saved!']));
+            } else if (spot.key === 'shrine') {
+                this.say('EGG SHRINE', this.shrinePages());
+            } else if (spot.key === 'table') {
+                if (!mon) {
+                    this.say('PARTNER TABLE', ['Four monster cards lie on the table: DRAGON, KRAKEN, TYPHOEUS and GODZILLA. Each one belongs to an element.'],
+                        [{ label: 'Choose partner', value: 'choose' }, { label: 'Not yet', value: null }],
+                        (v) => v && this.openMonsterSelect());
+                } else {
+                    this.say('PARTNER TABLE', [`Your partner is ${mon.name.toUpperCase()} (${BATTLE.elements[element].name.toUpperCase()}). Swapping changes your element and your theme.`],
+                        [{ label: 'Swap partner', value: 'swap' }, { label: 'Keep partner', value: null }],
+                        (v) => v && this.openMonsterSelect());
+                }
+            } else if (spot.key === 'door') {
+                if (!mon) {
+                    this.say('DOOR', ["It's dangerous to go out alone! Choose a partner at the PARTNER TABLE first."]);
+                } else {
+                    this.say('DOOR', ['Where to?'],
+                        [{ label: 'Explore town', value: 'town' }, { label: 'Quick battle', value: 'battle' }, { label: 'Stay inside', value: null }],
+                        (v) => { if (v === 'town') this.leaveToTown(); else if (v === 'battle') this.quickBattle(); });
+                }
+            }
+        }
+
+        shrinePages() {
+            const adaptive = adaptiveModel();
+            if (!adaptive) return ['The egg sleeps quietly.'];
+            const s = adaptive.insight();
+            if (s.samples < 3) {
+                return ['The egg is listening... Answer a few battle questions and it will learn how you think.',
+                    `MathMon then picks each question so you succeed about ${Math.round(adaptive.TARGET * 100)}% of the time: hard enough to grow, never too hard.`];
+            }
+            const p = s.perOp;
+            return [
+                `The egg glows! Your math rhythm: ${s.level.toUpperCase()}. Recent accuracy ${s.recentAccuracy}%, average answer ${s.responseTime}s.`,
+                `Predicted success on medium questions:  + ${p.addition}%   - ${p.subtraction}%   x ${p.multiplication}%   / ${p.division}%`,
+                `Learned from ${s.samples} answers (${s.source === 'tfjs' ? 'TensorFlow.js' : s.source === 'server' ? 'the global model' : 'live learning'}). Weaker operations show up more, with friendlier numbers.`
+            ];
+        }
+
+        // ---- Leaving -----------------------------------------------------------------------------
+        leave(sceneKey, data, viaDoor) {
+            if (this.locked) return;
+            this.locked = true;
+            if (viaDoor) {
+                this.setDoor(true);
+                this.facing = 'down';
+                this.tweens.add({ targets: this.player, x: HOUSE.doorX, y: 600, duration: 700, ease: 'Sine.easeIn',
+                    onUpdate: () => { this.walkTime += 1 / 60; this.syncPlayer(true); } });
+            }
+            this.cameras.main.fadeOut(viaDoor ? 650 : 350, 0, 0, 0);
+            this.time.delayedCall(viaDoor ? 650 : 350, () => this.scene.start(sceneKey, data));
+        }
+
+        profile() {
+            return { gender: this.gender, playerName: this.playerName, stats: this.stats, world: this.world };
+        }
+
+        openMonsterSelect() {
+            this.leave('MonsterSelectScene', this.profile(), false);
+        }
+
+        leaveToTown() {
+            saveSceneProgress(this);
+            this.leave('OverworldScene', { ...this.profile(), world: this.world || undefined }, true);
+        }
+
+        quickBattle() {
+            saveSceneProgress(this);
+            this.leave('BattleScene', { ...wildBattleData(this.profile()), returnScene: 'house' }, true);
         }
     }
 
@@ -1978,57 +2628,64 @@
             this.world = data.world || { location: 'sunmeadow', playerX: 368, playerY: 432 };
         }
         create() {
-            this.cameras.main.setBackgroundColor('#1a1424');
+            Theme.apply(this.stats.element || null);
+            UI.backdrop(this);
             this.cameras.main.fadeIn(300, 0, 0, 0);
+            this.leaving = false;
 
             const cw = this.cameras.main.width;
             const cy = this.cameras.main.height / 2;
-
-            const labels = [
-                { key:'addition', label:'+ Addition', color:'#ff6b35', x: cw/2 },
-                { key:'subtraction', label:'- Subtraction', color:'#42a5f5', x: cw/2 },
-                { key:'multiplication', label:'× Multiplication', color:'#ffa726', x: cw/2 },
-                { key:'division', label:'÷ Division', color:'#ab47bc', x: cw/2 }
+            const topics = [
+                { key: 'addition', label: '+  Addition', color: '#ff6b35' },
+                { key: 'subtraction', label: '-  Subtraction', color: '#42a5f5' },
+                { key: 'multiplication', label: 'x  Multiplication', color: '#ffa726' },
+                { key: 'division', label: '/  Division', color: '#ab47bc' }
             ];
 
-            this.add.text(cw/2, cy - 120, 'TRAINING', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'30px', color:'#ffd740' }).setOrigin(0.5);
-            this.add.text(cw/2, cy - 70, 'Choose a topic to practice:', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'15px', color:'#b39ddb' }).setOrigin(0.5);
+            UI.title(this, cw / 2, cy - 170, 'Training', 20);
+            UI.text(this, cw / 2, cy - 132, 'CHOOSE A TOPIC TO PRACTICE', { size: 8, color: TOKENS.muted });
 
-            labels.forEach((lbl, i) => {
-                const y = cy - 20 + i * 40;
-                const strokeColor = Phaser.Display.Color.HexStringToColor(lbl.color).color;
-                const box = this.add.rectangle(cw/2, y, 280, 32, 0x000000, 0.7).setStrokeStyle(2, strokeColor);
-                const text = this.add.text(cw/2, y, lbl.label, { fontFamily:'"Atkinson Hyperlegible"', fontSize:'19px', color:'#ffffff' }).setOrigin(0.5);
-
-                box.setInteractive({ useHandCursor: true });
-                box.on('pointerover', () => { box.setFillStyle(0xffffff, 0.1); text.setColor(lbl.color); SoundManager.playHover(); });
-                box.on('pointerout', () => { box.setFillStyle(0x000000, 0.7); text.setColor('#ffffff'); });
-                box.on('pointerdown', () => {
-                    this.cameras.main.fadeOut(200, 0, 0, 0);
-                    this.time.delayedCall(200, () => this.scene.start('BattleScene', {
-                        mode: 'training',
-                        category: lbl.key,
-                        creatureKey: 'embercub',
-                        creature: CREATURES.embercub,
-                        difficulty: Math.min(10, Math.max(1, this.stats.level)),
-                        gender: this.gender,
-                        playerName: this.playerName,
-                        stats: this.stats,
-                        world: this.world
-                    }));
+            const start = (topic) => {
+                if (this.leaving) return;
+                this.leaving = true;
+                SoundManager.playSelect();
+                this.cameras.main.fadeOut(200, 0, 0, 0);
+                this.time.delayedCall(200, () => this.scene.start('BattleScene', {
+                    mode: 'training',
+                    category: topic.key,
+                    creatureKey: 'embercub',
+                    creature: CREATURES.embercub,
+                    difficulty: Math.min(10, Math.max(1, this.stats.level)),
+                    gender: this.gender,
+                    playerName: this.playerName,
+                    stats: this.stats,
+                    world: this.world
+                }));
+            };
+            topics.forEach((topic, i) => {
+                UI.button(this, cw / 2, cy - 70 + i * 62, `${i + 1}  ${topic.label}`, {
+                    width: 340, height: 48, size: 10, color: topic.color,
+                    onHover: () => SoundManager.playHover(), onClick: () => start(topic)
                 });
             });
+            this.input.keyboard.on('keydown', (event) => {
+                const n = Number(event.key);
+                if (n >= 1 && n <= topics.length) start(topics[n - 1]);
+            });
 
-            this.add.text(cw/2, cy + 160, 'Press ESC to return', { fontFamily:'"Atkinson Hyperlegible"', fontSize:'15px', color:'#ff5252' }).setOrigin(0.5);
-
-            this.input.keyboard.once('keydown-ESC', () => {
+            const back = () => {
+                if (this.leaving) return;
+                this.leaving = true;
                 this.cameras.main.fadeOut(200, 0, 0, 0);
                 this.time.delayedCall(200, () => this.scene.start('OverworldScene', {
                     gender: this.gender,
                     playerName: this.playerName,
-                    stats: this.stats
+                    stats: this.stats,
+                    world: this.world
                 }));
-            });
+            };
+            UI.button(this, cw / 2, cy + 200, 'Back (Esc)', { width: 200, height: 40, size: 9, color: TOKENS.bad, onClick: back });
+            this.input.keyboard.once('keydown-ESC', back);
         }
     }
 
@@ -2047,7 +2704,7 @@
                     // Every scene sets its own camera background, so 2D scenes look unchanged.
                     transparent: true,
                     pixelArt: false,
-                    scene: [BootScene, TitleScene, CharacterSelectScene, NameEntryScene, ElementSelectScene, OverworldScene, BattleScene, ResultsScene, HouseInteriorScene, TrainingScene],
+                    scene: [BootScene, TitleScene, CharacterSelectScene, NameEntryScene, MonsterSelectScene, OverworldScene, BattleScene, ResultsScene, HouseInteriorScene, TrainingScene],
                     scale: {
                         mode: Phaser.Scale.FIT,
                         autoCenter: Phaser.Scale.CENTER_BOTH,

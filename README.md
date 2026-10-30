@@ -499,6 +499,59 @@ repository; the procedural models are the default.
 
 ---
 
+## Look & Flow
+
+One pixel-art design system covers every screen (`js/ui-theme.js` + the `:root`
+tokens in `css/game-shell.css`): `#1a1625` navy/purple background, the
+"Press Start 2P" pixel font, yellow uppercase titles, and cards, buttons, HUD
+panels and dialog boxes with 3px solid borders around near-black panels.
+
+1. **Choose your trainer**: Boy (blue card) or Girl (pink card), then enter a name.
+2. **The house** is your home base. You walk in through the front door and move with
+   WASD / arrows / the on-screen D-pad, or click an object to walk to it.
+   E / Space / A interacts:
+   - **Partner table**: choose your monster.
+   - **Door**: explore town or start a quick battle.
+   - **Bookshelf**: math tips.
+   - **Egg shrine**: what the adaptive model has learned about you.
+   - **Bed**: rest and save.
+   - **Window**: shows your element's home map.
+3. **Choose your monster**: Dragon (Fire), Kraken (Water), Typhoeus (Wind), Godzilla (Earth).
+4. **Re-theme**: the whole UI takes on that element's accent color:
+   - HUD frames, buttons, dialogs and the house's blanket, rug, banner and egg change color;
+   - ambient particles change (embers, bubbles, wind or dust);
+   - battles still take place in the **opponent's** arena (volcano, ocean, storm peak or rocky ruins);
+     set `arenaFrom: 'player'` in `js/battle-config.js` to use your partner's arena instead.
+
+## Adaptive Difficulty (Machine Learning)
+
+`js/adaptive-ml.js` is a logistic-regression model. It predicts the chance that
+**this** player answers a question correctly from:
+
+- the question: operation and difficulty;
+- the player's recent accuracy and accuracy on that operation;
+- average response time;
+- current streak;
+- damage taken in this battle.
+
+Before every question it picks the operation, number range and timer that bring
+the predicted success closest to **72%**. It also drives the enemy AI: a player
+who is cruising sees occasional heavy strikes, and a struggling player sees the
+enemy hesitate more often. The model learns online after every answer and refits
+with **TensorFlow.js** every 10 answers (plain-JS fallback when offline). With the
+Azure backend, all players' answers train a global model (`python/adaptive_model.py`,
+run locally or as an Azure ML job). New players then start from that model.
+Settings live in `js/battle-config.js` → `adaptive`.
+
+## Microsoft Azure
+
+Hosting on **Azure Static Web Apps**, a serverless API on **Azure Functions** (`api/`),
+storage in **Azure Cosmos DB** (players, leaderboard, training data, models) and
+**Azure Machine Learning** for training and the classifier endpoint. Setup,
+environment variables and deployment steps are in [AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md).
+
+---
+
 ## Machine Learning
 
 ### Classification Logic

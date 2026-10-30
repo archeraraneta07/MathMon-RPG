@@ -65,6 +65,15 @@ const MathMonBattleConfig = {
         }
     },
 
+    // ---- Adaptive difficulty (js/adaptive-ml.js) -----------------------------------
+    // The ML model picks the operation, number range and timer for each question
+    // (aiming for ~72% success) and steers the enemy AI (heavy strikes / hesitation).
+    adaptive: {
+        enabled: true,          // false → questions come straight from questionTiers
+        enemyAi: true,          // false → the enemy always uses its normal attack
+        syncGlobalModel: true   // fetch the all-players model from GET /api/ml/model when available
+    },
+
     // ---- Typed-answer input ------------------------------------------------------
     answers: {
         maxLength: 6,           // digits only — answers are whole numbers
@@ -139,15 +148,20 @@ const MathMonBattleConfig = {
     elementOrder: ['fire', 'water', 'wind', 'earth'],
 
     // ---- Signature boss monsters (one per element, each with its own 3D arena)
+    // `species` is the label on the monster-select card;
     // `arena` picks the environment in js/battle-3d/environments.js;
     // `model` (optional) is a .glb to use instead of the procedural model;
     // `sprite2d` is the Phaser texture used by the 2D fallback stage.
     monsters: {
-        dragon:   { name: 'Pyrovex',   title: 'Fire Dragon',        element: 'fire',  arena: 'volcano', sprite2d: 'embercub', model: null },
-        kraken:   { name: 'Kraken',    title: 'Abyssal Kraken',     element: 'water', arena: 'ocean',   sprite2d: 'aquabbit', model: null },
-        typhoeus: { name: 'Typhoeus',  title: 'Storm Giant',        element: 'wind',  arena: 'peak',    sprite2d: 'mistFox',  model: null },
-        titan:    { name: 'Seismodon', title: 'Earth Titan',        element: 'earth', arena: 'ruins',   sprite2d: 'rockite',  model: null }
+        dragon:   { name: 'Pyrovex',   species: 'Dragon',   title: 'Fire Dragon',    element: 'fire',  arena: 'volcano', sprite2d: 'monster2d_fire', model: null },
+        kraken:   { name: 'Kraken',    species: 'Kraken',   title: 'Abyssal Kraken', element: 'water', arena: 'ocean',   sprite2d: 'monster2d_water', model: null },
+        typhoeus: { name: 'Typhoeus',  species: 'Typhoeus', title: 'Storm Giant',    element: 'wind',  arena: 'peak',    sprite2d: 'monster2d_wind',  model: null },
+        titan:    { name: 'Seismodon', species: 'Godzilla', title: 'Earth Titan',    element: 'earth', arena: 'ruins',   sprite2d: 'monster2d_earth',  model: null }
     },
+
+    // Which side's home arena hosts the battle: 'enemy' (the opponent monster's
+    // arena, the original behaviour) or 'player' (the partner's element arena).
+    arenaFrom: 'enemy',
 
     /*
      * Skill effect types (applied by js/battle-rules.js):

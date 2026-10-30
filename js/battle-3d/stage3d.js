@@ -124,7 +124,7 @@ const ACTION_ANIM = { normal: 'attack', skill1: 'skill1', skill2: 'skill2', ulti
 
 class Stage3D {
     /**
-     * @param {object} opts { container, config, playerMonster, enemyMonster, playerElement, enemyElement, hud, sound }
+     * @param {object} opts { container, config, playerMonster, enemyMonster, playerElement, enemyElement, hud, sound, arena? }
      */
     constructor(opts) {
         this.opts = opts;
@@ -160,7 +160,8 @@ class Stage3D {
 
         this.vfx = new VFX(this);
         const enemyDef = opts.enemyMonster;
-        this.env = buildEnvironment(enemyDef.arena, this);
+        // Default: the enemy monster's arena. opts.arena (config.arenaFrom: 'player') overrides it.
+        this.env = buildEnvironment(opts.arena || enemyDef.arena, this);
         this.scene.add(this.env.group);
         // Camera-side fill light: keeps monsters readable when the arena's sun is behind them.
         const fill = new THREE.DirectionalLight('#dfe8ff', 1.1);

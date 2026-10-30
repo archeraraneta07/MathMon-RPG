@@ -500,6 +500,20 @@ def export_player_data(player_id):
         }), 404
 
 
+# ----- Adaptive difficulty model -----
+
+ADAPTIVE_WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), 'data', 'adaptive_weights.json')
+
+
+@app.route('/api/ml/model', methods=['GET'])
+def adaptive_model_weights():
+    """Serve the global adaptive-difficulty model (train it with adaptive_model.py)."""
+    if not os.path.exists(ADAPTIVE_WEIGHTS_PATH):
+        return jsonify({'error': 'No trained model yet: python adaptive_model.py demo'}), 404
+    with open(ADAPTIVE_WEIGHTS_PATH, 'r', encoding='utf-8') as f:
+        return jsonify(json.load(f))
+
+
 # ----- Health check -----
 
 @app.route('/api/health', methods=['GET'])
