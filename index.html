@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,8 +7,9 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/game-shell.css?v=3">
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bungee&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/game-shell.css?v=8">
+    <link rel="stylesheet" href="css/battle-hud.css?v=8">
 </head>
 <body>
     <div id="game-container">
@@ -43,20 +44,44 @@
         };
     </script>
 
-    <script src="js/phaser.min.js?v=3" onerror="window.showLoadError('Failed to load js/phaser.min.js')"
+    <script src="js/phaser.min.js?v=7" onerror="window.showLoadError('Failed to load js/phaser.min.js')"
             onload="window.updateLoadStatus('Phaser loaded')"></script>
-    <script src="js/monsters.js?v=3" onerror="window.showLoadError('Failed to load js/monsters.js')"
+    <script src="js/monsters.js?v=7" onerror="window.showLoadError('Failed to load js/monsters.js')"
             onload="window.updateLoadStatus('monsters.js loaded')"></script>
-    <script src="js/questions.js?v=3" onerror="window.showLoadError('Failed to load js/questions.js')"
+    <script src="js/questions.js?v=7" onerror="window.showLoadError('Failed to load js/questions.js')"
             onload="window.updateLoadStatus('questions.js loaded')"></script>
-    <script src="js/ml.js?v=3" onerror="window.showLoadError('Failed to load js/ml.js')"
+    <script src="js/ml.js?v=7" onerror="window.showLoadError('Failed to load js/ml.js')"
             onload="window.updateLoadStatus('ml.js loaded')"></script>
-        <script src="js/mobile-controls.js?v=3" onerror="window.showLoadError('Failed to load js/mobile-controls.js')"
+        <script src="js/mobile-controls.js?v=7" onerror="window.showLoadError('Failed to load js/mobile-controls.js')"
             onload="window.updateLoadStatus('mobile-controls.js loaded')"></script>
-        <script src="js/api-client.js?v=3" onerror="window.showLoadError('Failed to load js/api-client.js')"
+        <script src="js/api-client.js?v=8" onerror="window.showLoadError('Failed to load js/api-client.js')"
             onload="window.updateLoadStatus('api-client.js loaded')"></script>
-    <script src="js/phaser-game.js?v=3" onerror="window.showLoadError('Failed to load js/phaser-game.js')"
+    <script src="js/battle-config.js?v=8" onerror="window.showLoadError('Failed to load js/battle-config.js')"></script>
+    <script src="js/battle-rules.js?v=7" onerror="window.showLoadError('Failed to load js/battle-rules.js')"></script>
+    <script src="js/question-bank.js?v=7" onerror="window.showLoadError('Failed to load js/question-bank.js')"></script>
+    <script src="js/question-deck.js?v=8" onerror="window.showLoadError('Failed to load js/question-deck.js')"></script>
+    <script src="js/adaptive-ml.js?v=8" onerror="window.showLoadError('Failed to load js/adaptive-ml.js')"></script>
+    <script src="js/ui-theme.js?v=8" onerror="window.showLoadError('Failed to load js/ui-theme.js')"></script>
+    <script src="js/pixel-art.js?v=8" onerror="window.showLoadError('Failed to load js/pixel-art.js')"></script>
+    <script src="js/battle-hud.js?v=7" onerror="window.showLoadError('Failed to load js/battle-hud.js')"></script>
+    <script src="js/battle-vfx.js?v=8" onerror="window.showLoadError('Failed to load js/battle-vfx.js')"></script>
+    <script src="js/battle-stage-2d.js?v=7" onerror="window.showLoadError('Failed to load js/battle-stage-2d.js')"></script>
+    <script src="js/audio/audio-synth.js?v=7" onerror="window.showLoadError('Failed to load js/audio/audio-synth.js')"></script>
+    <script src="js/audio/audio-manifest.js?v=7" onerror="window.showLoadError('Failed to load js/audio/audio-manifest.js')"></script>
+    <script src="js/audio/audio-manager.js?v=7" onerror="window.showLoadError('Failed to load js/audio/audio-manager.js')"></script>
+    <script src="js/audio/audio-ui.js?v=7" onerror="window.showLoadError('Failed to load js/audio/audio-ui.js')"></script>
+    <script src="js/title-screen.js?v=7" onerror="window.showLoadError('Failed to load js/title-screen.js')"></script>
+    <script src="js/world/world-data.js?v=7" onerror="window.showLoadError('Failed to load js/world/world-data.js')"></script>
+    <!-- 3D battle stage (Three.js r160, bundled locally). ES modules need http(s);
+         if this fails to load (e.g. index.html opened from disk), battles use the 2D stage. -->
+    <script type="importmap">
+        { "imports": { "three": "./js/vendor/three/three.module.js", "three/addons/": "./js/vendor/three/addons/" } }
+    </script>
+    <script type="module" src="js/battle-3d/stage3d.js?v=8"></script>
+    <script type="module" src="js/world-3d/overworld3d.js?v=7"></script>
+    <script type="module" src="js/title-3d/title3d.js?v=7"></script>
+    <script src="js/phaser-game.js?v=8" onerror="window.showLoadError('Failed to load js/phaser-game.js')"
             onload="window.updateLoadStatus('phaser-game.js loaded')"></script>
-    <script src="js/bootstrap.js?v=3"></script>
+    <script src="js/bootstrap.js?v=7"></script>
 </body>
 </html>

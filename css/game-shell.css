@@ -1,11 +1,73 @@
+/* ==========================================================================
+   MathMon design tokens — shared by every screen.
+   js/ui-theme.js writes the same values from MathMonTheme.TOKENS at start-up
+   and switches the --mm-theme-* accent when the partner element changes
+   (Phaser scenes read the same tokens from JS). Keep the two in sync.
+   ========================================================================== */
+:root {
+    --mm-bg-primary: #1a1625;
+    --mm-bg-deep: #120f1a;
+    --mm-panel: #0d0a14;
+    --mm-panel-hi: #1b1529;
+    --mm-line-color: #3d3356;
+    --mm-title-color: #ffd740;
+    --mm-text-color: #ffffff;
+    --mm-muted-color: #b9b0cc;
+    --mm-border-w: 3px;
+    --mm-font-pixel: 'Press Start 2P', monospace;
+    --mm-font-body: 'Atkinson Hyperlegible', sans-serif;
+    /* element accent: neutral gold until a partner monster is chosen */
+    --mm-theme-accent: #ffd740;
+    --mm-theme-glow: #fff3b0;
+    --mm-theme-deep: #2a2140;
+    transition: --mm-theme-accent 0.8s ease, --mm-theme-glow 0.8s ease, --mm-theme-deep 0.8s ease;
+}
+
+/* Registered so the accent colors animate smoothly on a re-theme. */
+@property --mm-theme-accent { syntax: '<color>'; inherits: true; initial-value: #ffd740; }
+@property --mm-theme-glow { syntax: '<color>'; inherits: true; initial-value: #fff3b0; }
+@property --mm-theme-deep { syntax: '<color>'; inherits: true; initial-value: #2a2140; }
+
 html,
 body {
     margin: 0;
     padding: 0;
     height: 100%;
     overflow: hidden;
-    background: #1a1424;
-    font-family: 'Atkinson Hyperlegible', sans-serif;
+    background: var(--mm-bg-primary);
+    font-family: var(--mm-font-body);
+}
+
+/* ---- Ambient element particles (js/ui-theme.js) ------------------------------
+   Low-resolution canvas scaled up with pixelated sampling: every particle is a
+   chunky pixel. Above the 3D battle stage (z 2), under the battle HUD (z 5). */
+canvas.mm-ambient {
+    position: absolute;
+    z-index: 3;
+    margin: 0;
+    box-shadow: none;
+    pointer-events: none;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+/* Soft accent sweep when the theme changes element */
+.mm-theme-wash {
+    position: absolute;
+    z-index: 4;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--wash) 55%, transparent), transparent 70%);
+    animation: mm-theme-wash 1s ease-out forwards;
+}
+
+@keyframes mm-theme-wash {
+    0% { opacity: 0; }
+    30% { opacity: 0.8; }
+    100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mm-theme-wash { animation-duration: 0.01s; }
 }
 
 #game-container {
@@ -73,6 +135,382 @@ canvas {
     box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
 }
 
+/* ---- 3D overworld (js/world-3d/overworld3d.js) ------------------------------
+   The WebGL world sits UNDER the transparent Phaser canvas, so Phaser's HUD,
+   touch buttons and fades draw on top of it. Labels float above both. */
+canvas.mm-world3d {
+    position: absolute;
+    z-index: 0;
+    margin: 0;
+    box-shadow: none;
+    pointer-events: none;
+}
+
+.mm-world-labels {
+    --label-bg: rgba(10, 14, 26, 0.78);
+    position: absolute;
+    z-index: 2;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.mm-world-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--label-bg);
+    color: #ffffff;
+    font: 700 12px/1.3 'Atkinson Hyperlegible', sans-serif;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    will-change: transform;
+}
+
+.mm-world-label[hidden] { display: none; }
+.mm-world-label--building { color: #ffd740; border: 1px solid rgba(255, 215, 64, 0.45); }
+.mm-world-label--npc { font-size: 11px; }
+
+/* ---- Title screen (js/title-screen.js + js/title-3d/title3d.js) --------------- */
+canvas.mm-title3d {
+    position: absolute;
+    z-index: 0;
+    margin: 0;
+    box-shadow: none;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+}
+
+canvas.mm-title3d.is-visible { opacity: 1; }
+
+.mm-title {
+    --gold: #ffd740;
+    --ember: #ff7a2f;
+    position: absolute;
+    z-index: 5;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3.5% 4% 2.5%;
+    color: #f8fafc;
+    font-family: 'Atkinson Hyperlegible', sans-serif;
+    font-size: clamp(11px, calc(var(--title-w, 800px) * 0.02), 17px);
+    text-align: center;
+    /* legibility: darken top (logo) and bottom (menu) over the 3D scene */
+    background:
+        linear-gradient(180deg, rgba(8, 6, 18, 0.72) 0%, rgba(8, 6, 18, 0.15) 34%, rgba(8, 6, 18, 0) 50%, rgba(8, 6, 18, 0.25) 66%, rgba(8, 6, 18, 0.82) 100%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+}
+
+.mm-title.is-ready { opacity: 1; }
+.mm-title.is-leaving { opacity: 0; transition-duration: 0.35s; }
+.mm-title button { pointer-events: auto; font: inherit; }
+
+.mm-title__eyebrow {
+    margin: 0 0 0.2em;
+    color: #ffe9a8;
+    font-size: 0.8em;
+    font-weight: 700;
+    letter-spacing: 0.42em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+    animation: mm-title-rise 0.8s 0.2s both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mm-title__logo {
+    position: relative;
+    margin: 0;
+    font-family: 'Bungee', 'Atkinson Hyperlegible', sans-serif;
+    font-size: 5.6em;
+    font-weight: 400;
+    line-height: 0.95;
+    letter-spacing: 0.02em;
+    animation: mm-title-logo 1s 0.1s both cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.mm-title__word {
+    display: inline-block;
+    background: linear-gradient(180deg, #fff7c2 0%, var(--gold) 38%, var(--ember) 78%, #c23a12 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    /* stacked shadows = chunky 3D extrusion + dark outline glow */
+    filter: drop-shadow(0 1px 0 #7a2a08) drop-shadow(0 2px 0 #6a2307) drop-shadow(0 3px 0 #5a1d06)
+            drop-shadow(0 4px 0 #4a1705) drop-shadow(0 10px 14px rgba(0, 0, 0, 0.7));
+}
+
+.mm-title__word--mon {
+    background: linear-gradient(180deg, #e0fbff 0%, #6fe3ff 40%, #2f7fe0 80%, #173f8f 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    filter: drop-shadow(0 1px 0 #10306b) drop-shadow(0 2px 0 #0d295d) drop-shadow(0 3px 0 #0a224f)
+            drop-shadow(0 4px 0 #081b41) drop-shadow(0 10px 14px rgba(0, 0, 0, 0.7));
+}
+
+/* shine sweep across the logo */
+.mm-title__logo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%) -150% 0 / 60% 100% no-repeat;
+    mix-blend-mode: overlay;
+    animation: mm-title-shine 5s 1.4s infinite;
+    pointer-events: none;
+}
+
+.mm-title__quest {
+    margin: 0.1em 0 0;
+    color: #fff;
+    font-family: 'Bungee', 'Atkinson Hyperlegible', sans-serif;
+    font-size: 1.7em;
+    letter-spacing: 0.6em;
+    text-indent: 0.6em;
+    text-shadow: 0 0 18px rgba(255, 140, 60, 0.85), 0 3px 0 #3a1406;
+    animation: mm-title-rise 0.8s 0.45s both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mm-title__tagline {
+    margin: 0.5em 0 0;
+    color: #e2e8f0;
+    font-size: 1em;
+    font-weight: 700;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+    animation: mm-title-rise 0.8s 0.6s both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mm-title__chart {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35em;
+    margin: auto 0 0.9em;
+    padding: 0;
+    list-style: none;
+    animation: mm-title-rise 0.8s 0.8s both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mm-title__el {
+    --el-color: #999;
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0.25em 0.75em 0.25em 0.35em;
+    border: 1px solid color-mix(in srgb, var(--el-color) 70%, transparent);
+    border-radius: 999px;
+    background: rgba(10, 14, 26, 0.72);
+    color: var(--el-color);
+    backdrop-filter: blur(6px);
+}
+
+.mm-title__el svg { width: 1.5em; height: 1.5em; }
+.mm-title__el-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; }
+.mm-title__el-text strong { color: #fff; font-size: 0.85em; }
+.mm-title__el-text small { color: #cbd5e1; font-size: 0.7em; }
+.mm-title__beats { color: #ffd740; font-size: 1.3em; font-weight: 700; text-shadow: 0 2px 4px #000; }
+
+.mm-title__menu {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55em;
+    width: min(22em, 80%);
+    animation: mm-title-rise 0.8s 1s both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mm-title__btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1em;
+    min-height: 44px;
+    padding: 0.55em 1em;
+    border: var(--mm-border-w) solid color-mix(in srgb, var(--mm-theme-accent) 70%, transparent);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--mm-panel) 85%, transparent);
+    color: #fff;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.mm-title__btn-label { font-family: var(--mm-font-pixel); font-size: 0.8em; line-height: 1.6; text-transform: uppercase; }
+.mm-title__btn-sub { color: #cbd5e1; font-size: 0.78em; }
+
+.mm-title__btn--primary {
+    border-color: #8a5a00;
+    background: linear-gradient(180deg, #ffe57f, var(--gold) 55%, #f0a020);
+    box-shadow: 0 0.3em 0 #000000, 0 0.6em 1.4em rgba(0, 0, 0, 0.5);
+    color: #24160a;
+}
+
+.mm-title__btn--primary .mm-title__btn-sub { color: #5a3d12; font-weight: 700; }
+.mm-title__btn--small { min-height: 40px; padding: 0.35em 1em; }
+.mm-title__btn--small .mm-title__btn-label { font-size: 0.9em; }
+
+.mm-title__btn:hover,
+.mm-title__btn:focus-visible {
+    outline: none;
+    transform: translateY(-2px) scale(1.02);
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(255, 215, 64, 0.35), 0 0.6em 1.4em rgba(0, 0, 0, 0.5);
+}
+
+.mm-title__btn--primary:hover,
+.mm-title__btn--primary:focus-visible {
+    box-shadow: 0 0.3em 0 #8a5a00, 0 0 0 3px rgba(255, 255, 255, 0.6), 0 0 1.6em rgba(255, 200, 60, 0.7);
+}
+
+.mm-title__btn:active { transform: translateY(2px); }
+.mm-title__btn.is-confirming { border-color: #ff6b6b; background: rgba(80, 16, 16, 0.85); animation: mm-title-pulse 0.9s infinite; }
+
+.mm-title__hint {
+    margin: 0.8em 0 0;
+    color: #cbd5e1;
+    font-size: 0.78em;
+    text-shadow: 0 1px 3px #000;
+}
+
+.mm-title__hint kbd {
+    display: inline-block;
+    min-width: 1.4em;
+    margin: 0 0.1em;
+    padding: 0.05em 0.35em;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-bottom-width: 2px;
+    border-radius: 0.3em;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font: 700 0.95em 'Atkinson Hyperlegible', sans-serif;
+}
+
+.mm-title__footer {
+    position: absolute;
+    right: 1.2em;
+    bottom: 0.8em;
+    margin: 0;
+    color: rgba(203, 213, 225, 0.55);
+    font-size: 0.65em;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+@media (max-height: 460px) {
+    .mm-title { padding-top: 2%; }
+    .mm-title__logo { font-size: 4.2em; }
+    .mm-title__tagline, .mm-title__footer { display: none; }
+    .mm-title__chart { margin-bottom: 0.5em; }
+    .mm-title__menu { flex-direction: row; flex-wrap: wrap; width: 92%; }
+    .mm-title__btn { flex: 1 1 0; }
+    .mm-title__btn-sub { display: none; }
+}
+
+@media (pointer: coarse) { .mm-title__hint { display: none; } }
+
+@keyframes mm-title-logo {
+    from { opacity: 0; transform: translateY(-0.4em) scale(0.6); filter: blur(10px); }
+}
+
+@keyframes mm-title-rise {
+    from { opacity: 0; transform: translateY(1em); }
+}
+
+@keyframes mm-title-shine {
+    0%, 70% { background-position: -150% 0; }
+    100% { background-position: 250% 0; }
+}
+
+@keyframes mm-title-pulse {
+    50% { box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mm-title *, .mm-title *::after { animation: none !important; }
+    canvas.mm-title3d { transition: none; }
+}
+
+/* ---- Audio controls (js/audio/audio-ui.js) ------------------------------------ */
+.mm-audio-btn {
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    padding: 9px;
+    border: 1px solid rgba(255, 215, 64, 0.55);
+    border-radius: 12px;
+    background: rgba(17, 24, 39, 0.88);
+    color: #ffd740;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.mm-audio-btn[hidden] { display: none; }
+.mm-audio-btn svg { width: 100%; height: 100%; }
+.mm-audio-btn:hover { background: rgba(51, 65, 85, 0.95); }
+.mm-audio-btn:focus-visible,
+.mm-audio-panel :focus-visible { outline: 3px solid #ffd740; outline-offset: 2px; }
+
+.mm-audio-panel {
+    position: absolute;
+    top: 60px;
+    right: max(10px, env(safe-area-inset-right));
+    z-index: 31;
+    width: min(280px, calc(100vw - 20px));
+    padding: 14px 16px;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-radius: 12px;
+    background: rgba(10, 14, 26, 0.96);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    color: #f8fafc;
+    font: 14px/1.4 'Atkinson Hyperlegible', sans-serif;
+}
+
+.mm-audio-panel[hidden] { display: none; }
+
+.mm-audio-panel__title {
+    display: block;
+    margin-bottom: 8px;
+    color: #ffd740;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.mm-audio-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+}
+
+.mm-audio-row span { width: 58px; font-weight: 700; }
+.mm-audio-row input { flex: 1; accent-color: #ffd740; min-height: 28px; }
+.mm-audio-row output { width: 40px; color: #a8b3c7; text-align: right; font-variant-numeric: tabular-nums; }
+
+.mm-audio-mute {
+    width: 100%;
+    min-height: 40px;
+    margin-top: 6px;
+    border: 0;
+    border-radius: 8px;
+    background: #ffd740;
+    color: #1a1424;
+    font: 700 14px 'Atkinson Hyperlegible', sans-serif;
+    cursor: pointer;
+}
+
+.mm-audio-mute[aria-pressed='true'] { background: #334155; color: #ffd740; }
+.mm-audio-note { margin: 8px 0 0; color: #94a3b8; font-size: 12px; }
+
 #loading,
 #error {
     position: absolute;
@@ -101,9 +539,9 @@ canvas {
     max-width: 560px;
     margin: 0 auto;
     padding: 8px;
-    border: 2px solid #ffd740;
-    border-radius: 8px;
-    background: rgba(24, 32, 43, 0.96);
+    border: var(--mm-border-w) solid var(--mm-theme-accent);
+    border-radius: 0;
+    background: var(--mm-panel);
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
 }
 
@@ -125,11 +563,11 @@ canvas {
 #mobile-submit {
     min-width: 88px;
     border: 0;
-    border-radius: 4px;
+    border-radius: 0;
     padding: 10px 14px;
-    background: #ffd740;
-    color: #17202a;
-    font: 700 16px 'Atkinson Hyperlegible', sans-serif;
+    background: var(--mm-theme-accent);
+    color: var(--mm-panel);
+    font: 12px var(--mm-font-pixel);
     touch-action: manipulation;
 }
 

@@ -1,0 +1,13 @@
+# secrets / local settings
+.env
+api/local.settings.json
+
+# dependencies and build output
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# trained models and generated data
+python/*.joblib
+python/data/adaptive_weights.json
